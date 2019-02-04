@@ -7,6 +7,7 @@
 #include <alsa/asoundlib.h>
 #include <math.h>
 #include "notes.h"
+#include "fft.h"
 
 #define MYTYPE char
 #define PI 3.14159265
@@ -77,8 +78,8 @@ int main(void)
 		if(err<0) printf("error de lectura. %s \n", strerror(errno));
 		
 		//echo(l,tmp,err,buff,buff_size,500,2);
-		//synth(440,0,buff,buff_size);	
-		detectNote(buff,buff_size);
+		synth(440,0,buff,buff_size);	
+		if(l==5)detectNote(buff,buff_size);
 		//write
 		err = snd_pcm_writei(handle,buff,frames);
 		if(err<0) {
@@ -164,13 +165,15 @@ void synth(int f, int instr, MYTYPE* buff, int buff_size){
 
 int detectNote( MYTYPE*buff, int buff_size){
 	
+
+	/*
 	int mean=0;
 	int counter=0;
 	int longitude = 0;
 	
 	int creixent = 1;
 	int firsttime=1;	
-	for(int i=1; i<buff_size;++i){
+	for(int i=1; i<buff_size;++i){ //bad approach
 		if(creixent){
 			if(buff[i]>=buff[i-1]) ++longitude;
 		        else{
@@ -196,6 +199,33 @@ int detectNote( MYTYPE*buff, int buff_size){
 	double d_max = rate/((double)mean/(double)counter); //s'ha simplificat un 2 adalt i abaix
 	printf("prediccio: %lf \n", d_max);
 	return 0;
+	*/
+
+	//double inputreal[buff_size];
+	//double inputimg[buff_size];
+	double fft_real[buff_size];
+	double fft_img[buff_size];
+	for(int k=0; k<buff_size; ++k){
+		double tmp = 0.0;
+		double tmpi = 0.0;
+		for(int i=0; i<buff_size; ++i){
+			//inputreal[i] = cos(((double)buff[i]*2*PI*i)/buff_size);
+			//inputimg[i]  = sin(((double)buff[i]*2*PI*i)/buff_size);
+			double tmp2 = ((double)buff[i]*2*PI*k)/(double)buff_size;
+			tmp += cos(tmp2);
+			tmpi += sin(tmp2);
+		}
+		fft_real[k]=tmp;
+		fft_img[k]=tmpi;
+	}
+	//double fft_final[buff_size];
+	//for(int i=0; i<buff_sizze
+
+	//Fft_transform(inputreal,inputimg,buff_size);
+	for(int i=0; i<buff_size; ++i){
+		double f = sqrt(fft_real[i]*fft_real[i]+fft_img[i]*fft_img[i]);
+		printf("i: %d, real: %lf, img: %lf, final :%lf \n",i,fft_real[i],fft_img[i],f);
+	}
 
 }
 
