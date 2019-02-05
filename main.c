@@ -23,7 +23,11 @@ int rate = 44100;
 int channels = 1;
 int seconds = 5;
 
-void init();
+void DeviceScan();
+void init_output();
+void iniusblib(libusb_context * ctx);
+void selectDevice(libusb_context *ctx, libusb_device_handle *dev_handle, int vid, int pid, int interface, int alt_setting);
+void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* trans);
 
 int howmany=-1;
 MYTYPE * echobuff = -1;
@@ -62,15 +66,6 @@ static void callback(struct libusb_transfer* transfer){
 	}
 
 }
-/*
-static void sig_hdlr(int signum){
-	switch(signum){
-		case SIGINT:
-			printf("nose\n");
-			break;
-	}
-}*/
-
 
 int main(void)
 {
@@ -78,7 +73,6 @@ int main(void)
 	//PCM = pulse code modulation
 	int err;
 	snd_pcm_sframes_t frames;
-	//init();
 	//open PCM
 	 err = snd_pcm_open(&handle,device,SND_PCM_STREAM_PLAYBACK,0);
 	if(err<0){
@@ -123,103 +117,13 @@ int main(void)
 	libusb_device **devs = NULL;
 	libusb_device_handle *dev_handle;
 	libusb_context *ctx = NULL;
-	int r;
-	size_t cnt;
-	r = libusb_init(&ctx); //ini library
-	if(r<0){
-		printf("error ini library, %s \n",strerror(errno));
-		return -1;
-	}
-	libusb_set_debug(ctx,3); //verbose level 3
-
-	cnt = libusb_get_device_list(ctx, &devs); //get list of devices
-	if (cnt<0){
-		printf("error listing devices, %s \n", strerror(errno));
-		return -1;
-	}
-	for(size_t i=0; i<cnt;++i){
-		struct libusb_device_descriptor desc;
-		r = libusb_get_device_descriptor(devs[i], &desc);
-		if(r<0) {
-			printf("error getting device info, %s \n",strerror(errno));
-			return -1;
-		}
-		struct libusb_config_descriptor *config;
-		libusb_get_config_descriptor(devs[i],0,&config);
-		printf("%d -> VendorID: %d,  ProductID %d, Ifaces %d\n", i,desc.idVendor, desc.idProduct, config->bNumInterfaces);
-		const struct libusb_interface *inter;
-		const struct libusb_interface_descriptor *interdesc;
-		const struct libusb_endpoint_descriptor *epdesc;
-		for (int i=0; i<config->bNumInterfaces; ++i){
-			inter = &config->interface[i];
-			printf ("    iz%d -> alternate settings: %d \n",i,inter->num_altsetting);
-			for(int j=0; j<inter->num_altsetting;++j){
-				interdesc = &inter->altsetting[j];
-				printf("        Alt_set:%d, Endpoints: %d\n",j,interdesc->bNumEndpoints);
-				for(int k=0; k<interdesc->bNumEndpoints; ++k){
-					epdesc = &interdesc->endpoint[k];
-					printf("            Ep:%d, DescriptorType: %d, Ep@: %d, MaxPacketSize %d \n",k,epdesc->bDescriptorType,epdesc->bEndpointAddress, epdesc->wMaxPacketSize);
-				}
-			}
-			printf("\n");
-		}
-		printf("//////////////////\n");
-	}
-
-	dev_handle = libusb_open_device_with_vid_pid(ctx, 2235,10690);
-	if(dev_handle==NULL){
-		printf("cannot open device \n");
-		return -1;
-	}else printf("device opened \n");
-
-	int interface = 2;
-	if(libusb_kernel_driver_active(dev_handle, interface) == 1){
-		printf("Kernel Driver Active \n");
-		if(libusb_detach_kernel_driver(dev_handle,interface) ==0) printf("Kernel Driver Detached \n");
-	}
-	r = libusb_claim_interface(dev_handle,interface);
-	if(r<0){
-		printf("couldn't claim interface %d \n",interface);
-		return -1;
-	}
-	r = libusb_set_interface_alt_setting(dev_handle,interface,1);
-	if (r!=0){
-		printf("couldnt set alt setting \n");
-	}
-	printf("interface %d claimed \n",interface);
-	int received = 0;
-	static uint8_t buffer[196]; //TODO: automatitzar max packet size
-	for(int i=0; i<196; ++i) buffer[i]=255;
-	int num_iso_pack = 1;
-	struct libusb_transfer *trans = libusb_alloc_transfer(num_iso_pack);
-	if (trans==NULL){
-		printf("Error allocating transfer");
-		return -1;
-	}
-	/*trans->dev_handle = dev_handle;
-	trans->endpoint = 132;
-	trans->type = LIBUSB_TRANSFER_TYPE_ISOCHRONOUS;
-	trans->buffer = buffer;
-	trans->timeout = 500;
-	trans->callback = &callback;
-	trans->num_iso_packets=num_iso_pack; */
 	
-	/*
-	struct sigaction sigact;
-	sigact.sa_handler = sig_hdlr;
-	sigemptyset (&sigact.sa_mask);
-	sigact.sa_flags = 0;
-	sigaction(SIGINT, &sigact, NULL);*/
+	iniusblib(ctx);
+	DeviceScan();
+	selectDevice(ctx, dev_handle,2235,10690,2,1);
 
+	iniTransmission(dev_handle,struct libusb_transfer* trans);
 
-	libusb_fill_iso_transfer(trans,dev_handle,132,buffer,sizeof(buffer),num_iso_pack,callback,NULL,0);
-	libusb_set_iso_packet_lengths(trans,sizeof(buffer)/num_iso_pack);
-	//TODO: recomanen enviar mes d'un packet
-
-	r = libusb_submit_transfer(trans);
-	if(r!=0){
-		printf("Error submiting transfer \n");
-	}
 	
 	while(1){
 		r = libusb_handle_events(NULL);
@@ -333,46 +237,6 @@ void synth(int f, int instr, MYTYPE* buff, int buff_size){
 
 int detectNote( MYTYPE*buff, int buff_size){ //TODO TE UN GRAN PROBLEMA QUAN FD NO DIVIDEIX A BUFF_SIZE
 	
-
-	/*
-	int mean=0;
-	int counter=0;
-	int longitude = 0;
-	
-	int creixent = 1;
-	int firsttime=1;	
-	for(int i=1; i<buff_size;++i){ //bad approach
-		if(creixent){
-			if(buff[i]>=buff[i-1]) ++longitude;
-		        else{
-		       		creixent = 0;
-				if(!firsttime){
-					mean+=longitude;
-					counter+=1;
-				}else firsttime=0;
-				longitude=0;
-		        }
-		}else{
-			if(buff[i]<=buff[i-1]) ++longitude;
-			else{
-				creixent=1;
-				if(!firsttime){
-					mean+=longitude;
-					counter+=1;
-				}else firsttime=0;
-				longitude=0;
-			}
-		}	
-	}
-	double d_max = rate/((double)mean/(double)counter); //s'ha simplificat un 2 adalt i abaix
-	printf("prediccio: %lf \n", d_max);
-	return 0;
-	*/
-
-	//double inputreal[buff_size];
-	//double inputimg[buff_size];
-
-
 	double fft_real[buff_size];
 	double fft_img[buff_size];
 
@@ -473,4 +337,94 @@ void init(){
 	if(err<0) printf("Cant write params. %s \n", strerror(errno));
 
 	//?
+}
+
+void DeviceScan(){
+	
+	size_t cnt = libusb_get_device_list(ctx, &devs); //get list of devices
+	if (cnt<0){
+		printf("error listing devices, %s \n", strerror(errno));
+		exit(0)
+	}
+	for(size_t i=0; i<cnt;++i){
+		struct libusb_device_descriptor desc;
+		int r = libusb_get_device_descriptor(devs[i], &desc);
+		if(r<0) {
+			printf("error getting device info, %s \n",strerror(errno));
+			exit(0);
+		}
+		struct libusb_config_descriptor *config;
+		libusb_get_config_descriptor(devs[i],0,&config);
+		printf("%d -> VendorID: %d,  ProductID %d, Ifaces %d\n", i,desc.idVendor, desc.idProduct, config->bNumInterfaces);
+		const struct libusb_interface *inter;
+		const struct libusb_interface_descriptor *interdesc;
+		const struct libusb_endpoint_descriptor *epdesc;
+		for (int i=0; i<config->bNumInterfaces; ++i){
+			inter = &config->interface[i];
+			printf ("    iz%d -> alternate settings: %d \n",i,inter->num_altsetting);
+			for(int j=0; j<inter->num_altsetting;++j){
+				interdesc = &inter->altsetting[j];
+				printf("        Alt_set:%d, Endpoints: %d\n",j,interdesc->bNumEndpoints);
+				for(int k=0; k<interdesc->bNumEndpoints; ++k){
+					epdesc = &interdesc->endpoint[k];
+					printf("            Ep:%d, DescriptorType: %d, Ep@: %d, MaxPacketSize %d \n",k,epdesc->bDescriptorType,epdesc->bEndpointAddress, epdesc->wMaxPacketSize);
+				}
+			}
+			printf("\n");
+		}
+		printf("//////////////////\n");
+	}
+	
+}
+
+void iniusblib(libusb_context *ctx){
+	int r = libusb_init(&ctx); //ini library
+	if(r<0){
+		printf("error ini library, %s \n",strerror(errno));
+		exit(0);
+	}
+	libusb_set_debug(ctx,3); //verbose level 3
+}
+
+void selectDevice(libusb_context *ctx, libusb_device_handle *dev_handle, int vid, int pid, int interface, int alt_setting){
+	dev_handle = libusb_open_device_with_vid_pid(ctx, vid,pid);
+	if(dev_handle==NULL){
+		printf("cannot open device \n");
+		exit(0);
+	}else printf("device opened \n");
+
+	if(libusb_kernel_driver_active(dev_handle, interface) == 1){
+		printf("Kernel Driver Active \n");
+		if(libusb_detach_kernel_driver(dev_handle,interface) ==0) printf("Kernel Driver Detached \n");
+	}
+	int r = libusb_claim_interface(dev_handle,interface);
+	if(r<0){
+		printf("couldn't claim interface %d \n",interface);
+		exit(0);
+	}
+	r = libusb_set_interface_alt_setting(dev_handle,interface,alt_setting);
+	if (r!=0){
+		printf("couldnt set alt setting \n");
+	}
+	printf("interface %d claimed \n",interface);
+}
+
+void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* trans){
+	int received = 0;
+	static uint8_t buffer[196]; //TODO: automatitzar max packet size
+	for(int i=0; i<196; ++i) buffer[i]=255;
+	int num_iso_pack = 1;
+	trans = libusb_alloc_transfer(num_iso_pack);
+	if (trans==NULL){
+		printf("Error allocating transfer");
+		return -1;
+	}
+	libusb_fill_iso_transfer(trans,dev_handle,132,buffer,sizeof(buffer),num_iso_pack,callback,NULL,0);
+	libusb_set_iso_packet_lengths(trans,sizeof(buffer)/num_iso_pack);
+	//TODO: recomanen enviar mes d'un packet
+
+	r = libusb_submit_transfer(trans);
+	if(r!=0){
+		printf("Error submiting transfer \n");
+	}
 }
