@@ -14,6 +14,7 @@
 
 #define MYTYPE char
 #define PI 3.14159265
+#define ISOSIZE 180
 
 static char *device = "default";
 
@@ -22,22 +23,75 @@ snd_pcm_hw_params_t *params;
 int rate = 44100;
 int channels = 1;
 int seconds = 5;
+snd_pcm_sframes_t frames;
+char* buff;
+int buff_size;
 
-void DeviceScan();
+void DeviceScan(libusb_context *ctx, libusb_device **devs);
 void init_output();
 void iniusblib(libusb_context * ctx);
-void selectDevice(libusb_context *ctx, libusb_device_handle *dev_handle, int vid, int pid, int interface, int alt_setting);
+libusb_device_handle* selectDevice(libusb_context *ctx, int vid, int pid, int interface, int alt_setting);
 void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* trans);
 
 int howmany=-1;
 MYTYPE * echobuff = -1;
 void echo(int loop, int period,int read, MYTYPE* buff, int buff_size, int ret, int layers);//layers default = 1
-
 void synth(int f, int instr, MYTYPE* buff, int buff_size);
 
 int detectNote( MYTYPE* buff, int buff_size);
 
+int temporalbuffer_size;
+char* temporalbuffer;
+int tempbuf_index=0;
+int lel = 1;
+
+int buffindex=0;
 static void callback(struct libusb_transfer* transfer){
+	
+	
+	if (transfer->status != LIBUSB_TRANSFER_COMPLETED){
+		printf("Transfer not completed. status = %d \n",transfer->status);
+		return;
+	}
+	//printf("Good transmision \n");
+	if (transfer->type == LIBUSB_TRANSFER_TYPE_ISOCHRONOUS){ //les iso pden tenir errors puntuals
+		for(int i=0; i<transfer->num_iso_packets; ++i){
+			struct libusb_iso_packet_descriptor *packet = &transfer->iso_packet_desc[i];
+			if (packet->status != LIBUSB_TRANSFER_COMPLETED){
+				printf("Error in packet number %d of %d \n",i,transfer->num_iso_packets);
+				return;
+			}
+		}
+	}
+	//printf("Transfer length: %d, Actual length: %d\n",transfer->length, transfer->actual_length);	
+	
+	int err;
+	//char bu[transfer->length];	
+	//read(0,bu,transfer->length);
+	
+	for(int i=0; i<transfer->length;++i){ //TODO: per accelerar..en realitat aquest buffer jo el tinc
+		
+		if(transfer->buffer[i]<254){
+			buff[buffindex] = transfer->buffer[i];
+			++buffindex;
+		}
+		//buff[buffindex] = bu[i];
+		//buffindex=1024;
+		if(buffindex>=1024){
+			err = snd_pcm_writei(handle,buff,frames);
+			if(err<0){
+				printf("error snd, prepare \n");
+				snd_pcm_prepare(handle);
+			}
+			//printf("sent! \n");
+			buffindex=0;
+		}
+	}
+	libusb_submit_transfer(transfer);
+}
+
+
+static void callback_old(struct libusb_transfer* transfer){
 
 	if (transfer->status != LIBUSB_TRANSFER_COMPLETED){
 		printf("Transfer not completed. status = %d \n",transfer->status);
@@ -54,11 +108,41 @@ static void callback(struct libusb_transfer* transfer){
 			}
 		}
 	}
-	printf("Transfer length: %d, Actual length: %d\n",transfer->length, transfer->actual_length);
+	//printf("Transfer length: %d, Actual length: %d\n",transfer->length, transfer->actual_length);	
+
 	for(int i=0; i<transfer->length; ++i){
-		//printf("%02x",transfer->buffer[i]);
-		//if(!(i%16)) printf("\n");
+
+
+		temporalbuffer[tempbuf_index]=transfer->buffer[i];
+		++tempbuf_index;
+		if(lel){
+		int x = transfer->buffer[i];
+		printf("%d ",transfer->buffer[i]);
+		if(x<100) printf(" ");
+		if(x<10) printf(" ");
+		if((i%16==0)&&i!=0) printf("\n");
+		}
 	}
+	printf("p\n");
+	if(tempbuf_index >= buff_size){
+
+		for(int i=0; i<buff_size; ++i){
+			buff[i]=temporalbuffer[i];
+		}
+
+		lel=0;
+		int err = snd_pcm_writei(handle,buff,frames);
+		if(err<0){
+			printf("error snd, prepare \n");
+			snd_pcm_prepare(handle);
+		}
+		printf("sent! \n");
+		for(int i=buff_size; i<temporalbuffer_size;++i){
+			temporalbuffer[i-buff_size]=temporalbuffer[i];
+		}
+		tempbuf_index=0;
+	}
+
 	//transfer again
 	if (libusb_submit_transfer(transfer) <0){
 		//printf("Error re-submitting transfer \n");
@@ -72,7 +156,6 @@ int main(void)
 	
 	//PCM = pulse code modulation
 	int err;
-	snd_pcm_sframes_t frames;
 	//open PCM
 	 err = snd_pcm_open(&handle,device,SND_PCM_STREAM_PLAYBACK,0);
 	if(err<0){
@@ -98,9 +181,14 @@ int main(void)
 	err = snd_pcm_hw_params(handle,params);
 	if(err<0) printf("Cant write params. %s \n", strerror(errno));
 	snd_pcm_hw_params_get_period_size(params, &frames, 0);
-	int buff_size = frames * channels *2; //el 2 es per el "sample size"
+	buff_size = frames * channels *2; //el 2 es per el "sample size"
+	
+	temporalbuffer_size = (buff_size/ISOSIZE + ((buff_size%ISOSIZE)?1:0))*ISOSIZE;
+	temporalbuffer = malloc(temporalbuffer_size);
+	printf("temp buff size is %d \n",temporalbuffer_size);
+
 	printf("buff size is %i \n" , buff_size);
-	MYTYPE * buff= (MYTYPE *)malloc(buff_size);
+	buff= malloc(buff_size);
 	int tmp = 0;
 	snd_pcm_hw_params_get_period_time(params, &tmp, NULL);
 	printf("tmp = : %d\n",tmp);
@@ -114,17 +202,22 @@ int main(void)
 	if(fd<0) {printf ("error opening %s \n", strerror(errno)); return -1;}
 	set_interface_attribs(fd,B115200,0);
 	close(fd);*/
+
+	//goto label;
+
 	libusb_device **devs = NULL;
-	libusb_device_handle *dev_handle;
+	//libusb_device_handle *dev_handle;
 	libusb_context *ctx = NULL;
 	
 	iniusblib(ctx);
-	DeviceScan();
-	selectDevice(ctx, dev_handle,2235,10690,2,1);
+	DeviceScan(ctx,devs);
+	libusb_device_handle *dev_handle = selectDevice(ctx,2235,10690,2,3);
 
-	iniTransmission(dev_handle,struct libusb_transfer* trans);
+	struct libusb_transfer* trans;
 
-	
+	iniTransmission(dev_handle,trans);
+
+	int r;	
 	while(1){
 		r = libusb_handle_events(NULL);
 		if(r != LIBUSB_SUCCESS){
@@ -136,7 +229,7 @@ int main(void)
 
 	libusb_free_transfer(trans);
 	libusb_free_device_list(devs,1);
-
+	label:
 	for (int l =0; l<=loops; ++l){
 		//read
 		err = read(0,buff,buff_size);
@@ -339,12 +432,12 @@ void init(){
 	//?
 }
 
-void DeviceScan(){
+void DeviceScan(libusb_context *ctx, libusb_device **devs){
 	
 	size_t cnt = libusb_get_device_list(ctx, &devs); //get list of devices
 	if (cnt<0){
 		printf("error listing devices, %s \n", strerror(errno));
-		exit(0)
+		exit(0);
 	}
 	for(size_t i=0; i<cnt;++i){
 		struct libusb_device_descriptor desc;
@@ -386,8 +479,10 @@ void iniusblib(libusb_context *ctx){
 	libusb_set_debug(ctx,3); //verbose level 3
 }
 
-void selectDevice(libusb_context *ctx, libusb_device_handle *dev_handle, int vid, int pid, int interface, int alt_setting){
-	dev_handle = libusb_open_device_with_vid_pid(ctx, vid,pid);
+libusb_device_handle* selectDevice(libusb_context *ctx, int vid, int pid, int interface, int alt_setting){
+	libusb_device_handle* dev_handle = libusb_open_device_with_vid_pid(ctx,vid,pid);
+
+	printf("dev handle : %d\n",dev_handle);
 	if(dev_handle==NULL){
 		printf("cannot open device \n");
 		exit(0);
@@ -407,23 +502,26 @@ void selectDevice(libusb_context *ctx, libusb_device_handle *dev_handle, int vid
 		printf("couldnt set alt setting \n");
 	}
 	printf("interface %d claimed \n",interface);
+	return dev_handle;
 }
 
 void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* trans){
 	int received = 0;
-	static uint8_t buffer[196]; //TODO: automatitzar max packet size
-	for(int i=0; i<196; ++i) buffer[i]=255;
+	int size = 180;
+	static uint8_t buffer[180]; //TODO: automatitzar max packet size
+	for(int i=0; i<180; ++i) buffer[i]=0;
 	int num_iso_pack = 1;
 	trans = libusb_alloc_transfer(num_iso_pack);
 	if (trans==NULL){
 		printf("Error allocating transfer");
-		return -1;
+		exit(0);
 	}
 	libusb_fill_iso_transfer(trans,dev_handle,132,buffer,sizeof(buffer),num_iso_pack,callback,NULL,0);
 	libusb_set_iso_packet_lengths(trans,sizeof(buffer)/num_iso_pack);
 	//TODO: recomanen enviar mes d'un packet
 
-	r = libusb_submit_transfer(trans);
+	int r = libusb_submit_transfer(trans);
+	printf("xxx\n");
 	if(r!=0){
 		printf("Error submiting transfer \n");
 	}

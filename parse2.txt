@@ -1,0 +1,762 @@
+temp buff size is 540 
+buff size is 500 
+tmp = : 11609
+loops : 430
+0 -> VendorID: 2235,  ProductID 10690, Ifaces 4
+    iz0 -> alternate settings: 1 
+        Alt_set:0, Endpoints: 0
+
+    iz1 -> alternate settings: 5 
+        Alt_set:0, Endpoints: 0
+        Alt_set:1, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 2, MaxPacketSize 192 
+        Alt_set:2, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 2, MaxPacketSize 96 
+        Alt_set:3, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 2, MaxPacketSize 96 
+        Alt_set:4, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 2, MaxPacketSize 48 
+
+    iz2 -> alternate settings: 19 
+        Alt_set:0, Endpoints: 0
+        Alt_set:1, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 196 
+        Alt_set:2, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 98 
+        Alt_set:3, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 180 
+        Alt_set:4, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 90 
+        Alt_set:5, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 132 
+        Alt_set:6, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 66 
+        Alt_set:7, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 92 
+        Alt_set:8, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 46 
+        Alt_set:9, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 68 
+        Alt_set:10, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 34 
+        Alt_set:11, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 34 
+        Alt_set:12, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 17 
+        Alt_set:13, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 18 
+        Alt_set:14, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 9 
+        Alt_set:15, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 48 
+        Alt_set:16, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 24 
+        Alt_set:17, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 24 
+        Alt_set:18, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 132, MaxPacketSize 12 
+
+    iz3 -> alternate settings: 1 
+        Alt_set:0, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 133, MaxPacketSize 1 
+
+//////////////////
+1 -> VendorID: 1060,  ProductID 60416, Ifaces 1
+    iz0 -> alternate settings: 1 
+        Alt_set:0, Endpoints: 3
+            Ep:0, DescriptorType: 5, Ep@: 129, MaxPacketSize 512 
+            Ep:1, DescriptorType: 5, Ep@: 2, MaxPacketSize 512 
+            Ep:2, DescriptorType: 5, Ep@: 131, MaxPacketSize 16 
+
+//////////////////
+2 -> VendorID: 1060,  ProductID 38164, Ifaces 1
+    iz0 -> alternate settings: 2 
+        Alt_set:0, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 129, MaxPacketSize 1 
+        Alt_set:1, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 129, MaxPacketSize 1 
+
+//////////////////
+3 -> VendorID: 7531,  ProductID 2, Ifaces 1
+    iz0 -> alternate settings: 1 
+        Alt_set:0, Endpoints: 1
+            Ep:0, DescriptorType: 5, Ep@: 129, MaxPacketSize 4 
+
+//////////////////
+dev handle : 17702448
+device opened 
+interface 2 claimed 
+xxx
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent! 
+sent
