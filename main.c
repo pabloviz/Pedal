@@ -1,11 +1,14 @@
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include<errno.h>
-// #include "./include/alsa/asoundlib.h"
 #include <alsa/asoundlib.h>
 #include <math.h>
+#include <fcntl.h>
+#include <termios.h>
+#include <unistd.h>
+//#include "openusb.h"
+#include <libusb-1.0/libusb.h>
 #include "notes.h"
 #include "fft.h"
 
@@ -29,6 +32,45 @@ void echo(int loop, int period,int read, MYTYPE* buff, int buff_size, int ret, i
 void synth(int f, int instr, MYTYPE* buff, int buff_size);
 
 int detectNote( MYTYPE* buff, int buff_size);
+
+static void callback(struct libusb_transfer* transfer){
+
+	if (transfer->status != LIBUSB_TRANSFER_COMPLETED){
+		printf("Transfer not completed. status = %d \n",transfer->status);
+		return;
+	}
+	//printf("Good transmision \n");
+	if (transfer->type == LIBUSB_TRANSFER_TYPE_ISOCHRONOUS){ //les isocrones poden tenir errors als packets
+		for(int i=0; i<transfer->num_iso_packets; ++i){
+			struct libusb_iso_packet_descriptor *packet = &transfer->iso_packet_desc[i];
+
+			if (packet->status != LIBUSB_TRANSFER_COMPLETED){
+				printf("Error in packet number %d of %d \n",i,transfer->num_iso_packets);
+				return;
+			}
+		}
+	}
+	printf("Transfer length: %d, Actual length: %d\n",transfer->length, transfer->actual_length);
+	for(int i=0; i<transfer->length; ++i){
+		//printf("%02x",transfer->buffer[i]);
+		//if(!(i%16)) printf("\n");
+	}
+	//transfer again
+	if (libusb_submit_transfer(transfer) <0){
+		//printf("Error re-submitting transfer \n");
+		//return;
+	}
+
+}
+/*
+static void sig_hdlr(int signum){
+	switch(signum){
+		case SIGINT:
+			printf("nose\n");
+			break;
+	}
+}*/
+
 
 int main(void)
 {
@@ -72,14 +114,133 @@ int main(void)
 
 	int loops = (seconds*1000000)/tmp;
 	printf("loops : %d\n",loops);
+
+	//open device
+	/*int fd = open("/dev/bus/usb/001/007", O_RDWR | O_NOCTTY);
+	if(fd<0) {printf ("error opening %s \n", strerror(errno)); return -1;}
+	set_interface_attribs(fd,B115200,0);
+	close(fd);*/
+	libusb_device **devs = NULL;
+	libusb_device_handle *dev_handle;
+	libusb_context *ctx = NULL;
+	int r;
+	size_t cnt;
+	r = libusb_init(&ctx); //ini library
+	if(r<0){
+		printf("error ini library, %s \n",strerror(errno));
+		return -1;
+	}
+	libusb_set_debug(ctx,3); //verbose level 3
+
+	cnt = libusb_get_device_list(ctx, &devs); //get list of devices
+	if (cnt<0){
+		printf("error listing devices, %s \n", strerror(errno));
+		return -1;
+	}
+	for(size_t i=0; i<cnt;++i){
+		struct libusb_device_descriptor desc;
+		r = libusb_get_device_descriptor(devs[i], &desc);
+		if(r<0) {
+			printf("error getting device info, %s \n",strerror(errno));
+			return -1;
+		}
+		struct libusb_config_descriptor *config;
+		libusb_get_config_descriptor(devs[i],0,&config);
+		printf("%d -> VendorID: %d,  ProductID %d, Ifaces %d\n", i,desc.idVendor, desc.idProduct, config->bNumInterfaces);
+		const struct libusb_interface *inter;
+		const struct libusb_interface_descriptor *interdesc;
+		const struct libusb_endpoint_descriptor *epdesc;
+		for (int i=0; i<config->bNumInterfaces; ++i){
+			inter = &config->interface[i];
+			printf ("    iz%d -> alternate settings: %d \n",i,inter->num_altsetting);
+			for(int j=0; j<inter->num_altsetting;++j){
+				interdesc = &inter->altsetting[j];
+				printf("        Alt_set:%d, Endpoints: %d\n",j,interdesc->bNumEndpoints);
+				for(int k=0; k<interdesc->bNumEndpoints; ++k){
+					epdesc = &interdesc->endpoint[k];
+					printf("            Ep:%d, DescriptorType: %d, Ep@: %d, MaxPacketSize %d \n",k,epdesc->bDescriptorType,epdesc->bEndpointAddress, epdesc->wMaxPacketSize);
+				}
+			}
+			printf("\n");
+		}
+		printf("//////////////////\n");
+	}
+
+	dev_handle = libusb_open_device_with_vid_pid(ctx, 2235,10690);
+	if(dev_handle==NULL){
+		printf("cannot open device \n");
+		return -1;
+	}else printf("device opened \n");
+
+	int interface = 2;
+	if(libusb_kernel_driver_active(dev_handle, interface) == 1){
+		printf("Kernel Driver Active \n");
+		if(libusb_detach_kernel_driver(dev_handle,interface) ==0) printf("Kernel Driver Detached \n");
+	}
+	r = libusb_claim_interface(dev_handle,interface);
+	if(r<0){
+		printf("couldn't claim interface %d \n",interface);
+		return -1;
+	}
+	r = libusb_set_interface_alt_setting(dev_handle,interface,1);
+	if (r!=0){
+		printf("couldnt set alt setting \n");
+	}
+	printf("interface %d claimed \n",interface);
+	int received = 0;
+	static uint8_t buffer[196]; //TODO: automatitzar max packet size
+	for(int i=0; i<196; ++i) buffer[i]=255;
+	int num_iso_pack = 1;
+	struct libusb_transfer *trans = libusb_alloc_transfer(num_iso_pack);
+	if (trans==NULL){
+		printf("Error allocating transfer");
+		return -1;
+	}
+	/*trans->dev_handle = dev_handle;
+	trans->endpoint = 132;
+	trans->type = LIBUSB_TRANSFER_TYPE_ISOCHRONOUS;
+	trans->buffer = buffer;
+	trans->timeout = 500;
+	trans->callback = &callback;
+	trans->num_iso_packets=num_iso_pack; */
+	
+	/*
+	struct sigaction sigact;
+	sigact.sa_handler = sig_hdlr;
+	sigemptyset (&sigact.sa_mask);
+	sigact.sa_flags = 0;
+	sigaction(SIGINT, &sigact, NULL);*/
+
+
+	libusb_fill_iso_transfer(trans,dev_handle,132,buffer,sizeof(buffer),num_iso_pack,callback,NULL,0);
+	libusb_set_iso_packet_lengths(trans,sizeof(buffer)/num_iso_pack);
+	//TODO: recomanen enviar mes d'un packet
+
+	r = libusb_submit_transfer(trans);
+	if(r!=0){
+		printf("Error submiting transfer \n");
+	}
+	
+	while(1){
+		r = libusb_handle_events(NULL);
+		if(r != LIBUSB_SUCCESS){
+			printf("libusb handle events unsuccesfull \n");
+			return 0;
+		}
+	}
+	return 0;
+
+	libusb_free_transfer(trans);
+	libusb_free_device_list(devs,1);
+
 	for (int l =0; l<=loops; ++l){
 		//read
 		err = read(0,buff,buff_size);
 		if(err<0) printf("error de lectura. %s \n", strerror(errno));
 		
 		//echo(l,tmp,err,buff,buff_size,500,2);
-		synth(440,0,buff,buff_size);	
-		if(l==5)detectNote(buff,buff_size);
+		//synth(293,0,buff,buff_size);	
+		//if(l<20)detectNote(buff,buff_size);
 		//write
 		err = snd_pcm_writei(handle,buff,frames);
 		if(err<0) {
@@ -89,6 +250,13 @@ int main(void)
 		//if(err > 0 && err < (long)sizeof(buff)) printf("Short write (expected %li, wrote %li)\n", (long)sizeof(buff),err);
 	}
 	return 0;
+	r = libusb_release_interface(dev_handle, 0);
+	if (r!=0){
+		printf("cannot release interface\n");
+	}
+	printf("interface released");
+	libusb_close(dev_handle);
+	libusb_exit(ctx);
 	snd_pcm_drain(handle);
 	snd_pcm_close(handle);
 	
@@ -143,27 +311,27 @@ void synth(int f, int instr, MYTYPE* buff, int buff_size){
 		++inside_period;
 		if(inside_period>=period_samples)inside_period=0;	
 	}*/
-	double period_samples = (rate*2.0)/(double)f;
+	double fd = (rate*2.0)/(double)f;
 	//printf("period_samples = %lf \n", period_samples);
 	for(int i=0; i<buff_size;++i){
-		double value = (sin(inside_period*2.0*PI/(double)period_samples))*128 + 127;
+		double value = (sin((inside_period*2.0*PI)/fd))*128 + 127;
 		buff[i] = (char) value;
 		++inside_period;
-		if(inside_period>=period_samples)inside_period=0;
+		if(inside_period>=fd)inside_period=0;
 	}
 
 	
-	FILE* fd  = fopen("sortida2.txt", "w+");
-	if(fd<=0)printf("lalala %s", strerror(errno));
+	FILE* fid  = fopen("sortida2.txt", "w+");
+	if(fid<=0)printf("lalala %s", strerror(errno));
 	for(int i=0; i<buff_size;++i){
-		fprintf(fd,"%d %d\n",i,buff[i]);
+		fprintf(fid,"%d %d\n",i,buff[i]);
 	}
-	fclose(fd);
+	fclose(fid);
 
 	
 }
 
-int detectNote( MYTYPE*buff, int buff_size){
+int detectNote( MYTYPE*buff, int buff_size){ //TODO TE UN GRAN PROBLEMA QUAN FD NO DIVIDEIX A BUFF_SIZE
 	
 
 	/*
@@ -203,29 +371,77 @@ int detectNote( MYTYPE*buff, int buff_size){
 
 	//double inputreal[buff_size];
 	//double inputimg[buff_size];
+
+
 	double fft_real[buff_size];
 	double fft_img[buff_size];
+
+	/*
+	int f = 600;
+	int fd = 2*rate / f;
+	double dummy[buff_size];
+	for(int i=0; i<buff_size;++i){
+		//dummy[i] = sin(2*PI*i*1/fd);
+		//printf("i : %d,  x : %lf \n",i,dummy[i]);	
+	}*/
+	//adapt
+	double adapt[buff_size];  //TODO posar aixo en el bucle intern i aixi m'estalvio bucles extres?
+	for(int i=0; i<buff_size; ++i){
+		adapt[i] = ((double)buff[i]-127.0)/128.0;
+	}
+
 	for(int k=0; k<buff_size; ++k){
 		double tmp = 0.0;
 		double tmpi = 0.0;
 		for(int i=0; i<buff_size; ++i){
 			//inputreal[i] = cos(((double)buff[i]*2*PI*i)/buff_size);
 			//inputimg[i]  = sin(((double)buff[i]*2*PI*i)/buff_size);
-			double tmp2 = ((double)buff[i]*2*PI*k)/(double)buff_size;
+			double tmp2 = ((2*PI*k*i)/(double)buff_size)*adapt[i];
 			tmp += cos(tmp2);
-			tmpi += sin(tmp2);
+			tmpi -= sin(tmp2);
 		}
-		fft_real[k]=tmp;
-		fft_img[k]=tmpi;
+		fft_real[k]=tmp/buff_size;
+		fft_img[k]=tmpi/buff_size;
 	}
 	//double fft_final[buff_size];
 	//for(int i=0; i<buff_sizze
 
 	//Fft_transform(inputreal,inputimg,buff_size);
-	for(int i=0; i<buff_size; ++i){
+	double max = 0;
+	int pos=0;
+	for(int i=1; i<buff_size; ++i){
 		double f = sqrt(fft_real[i]*fft_real[i]+fft_img[i]*fft_img[i]);
-		printf("i: %d, real: %lf, img: %lf, final :%lf \n",i,fft_real[i],fft_img[i],f);
+		if(f>max){
+		       	max=f;
+			pos=i;
+		}
+	//	printf("i: %d, real: %lf, img: %lf, final :%lf \n",i,fft_real[i],fft_img[i],f);
 	}
+	//printf("fft : %d \n",pos);
+	double result = ((double)pos/(double)buff_size)*2.0*(double)rate;
+	printf("result : %lf \n",result);
+	int nota = 0;
+	double ratio = (DO>result ? DO/result : result/DO);
+	double mindist = fabs(ratio-(int)ratio);
+	ratio = (DO_S>result ? DO_S/result : result/DO_S);
+	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=DO_S;}
+	ratio = (RE>result ? RE/result : result/RE);
+	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=RE;}
+	ratio = (RE_S>result ? RE_S/result : result/RE_S);
+	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=RE_S;}
+	ratio = (MI>result ? MI/result : result/MI);
+	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=MI;}
+	ratio = (FA>result ? FA/result : result/FA);
+	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=FA;}
+	ratio = (FA_S>result ? FA_S/result : result/FA_S);
+	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=FA_S;}
+	ratio = (SOL>result ? SOL/result : result/SOL);
+	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=SOL;}
+	ratio = (SOL_S>result ? SOL_S/result : result/SOL_S);
+	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=SOL_S;}
+	ratio = (LA>result ? LA/result : result/LA);
+	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=LA;}
+	printf("nota = %d \n",nota);		
 
 }
 
