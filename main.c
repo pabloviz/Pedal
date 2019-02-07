@@ -10,21 +10,26 @@
 //#include "openusb.h"
 #include <libusb-1.0/libusb.h>
 #include "notes.h"
+#include "effects.h"
 #include "fft.h"
 
 #define MYTYPE char
 #define PI 3.14159265
 #define ISOSIZE 180
+#define INTERFACE 2
+#define ALTSETTING 3
 
 static char *device = "default";
 
 snd_pcm_t *handle;
 snd_pcm_hw_params_t *params;
 int rate = 44100;
-int channels = 1;
+int channels = 2;
 int seconds = 5;
 snd_pcm_sframes_t frames;
 char* buff;
+int period;
+//char *tramabus;
 int buff_size;
 
 void DeviceScan(libusb_context *ctx, libusb_device **devs);
@@ -33,27 +38,36 @@ void iniusblib(libusb_context * ctx);
 libusb_device_handle* selectDevice(libusb_context *ctx, int vid, int pid, int interface, int alt_setting);
 void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* trans);
 
+/*
 int howmany=-1;
 MYTYPE * echobuff = -1;
 void echo(int loop, int period,int read, MYTYPE* buff, int buff_size, int ret, int layers);//layers default = 1
 void synth(int f, int instr, MYTYPE* buff, int buff_size);
+*/void applyeffects();
+
 
 int detectNote( MYTYPE* buff, int buff_size);
+char hola;
 
-int temporalbuffer_size;
-char* temporalbuffer;
-int tempbuf_index=0;
-int lel = 1;
 
 int buffindex=0;
+int pablo = 0;
 static void callback(struct libusb_transfer* transfer){
-	
+	if(pablo<500)++pablo;
+	/*
+	if(pablo<50){
+		++pablo;
+		libusb_submit_transfer(transfer);
+		return;
+	}
+	pablo=0;*/
 	
 	if (transfer->status != LIBUSB_TRANSFER_COMPLETED){
 		printf("Transfer not completed. status = %d \n",transfer->status);
 		return;
 	}
 	//printf("Good transmision \n");
+	int realsize = 0;
 	if (transfer->type == LIBUSB_TRANSFER_TYPE_ISOCHRONOUS){ //les iso pden tenir errors puntuals
 		for(int i=0; i<transfer->num_iso_packets; ++i){
 			struct libusb_iso_packet_descriptor *packet = &transfer->iso_packet_desc[i];
@@ -61,26 +75,34 @@ static void callback(struct libusb_transfer* transfer){
 				printf("Error in packet number %d of %d \n",i,transfer->num_iso_packets);
 				return;
 			}
+			//printf("%d: actual length %d\n",i,packet->actual_length);
+			realsize = packet->actual_length;
 		}
 	}
 	//printf("Transfer length: %d, Actual length: %d\n",transfer->length, transfer->actual_length);	
 	
 	int err;
-	//char bu[transfer->length];	
-	//read(0,bu,transfer->length);
+
+	//char bu[realsize];	
+	//read(0,bu,realsize);
 	
-	for(int i=0; i<transfer->length;++i){ //TODO: per accelerar..en realitat aquest buffer jo el tinc
-		
-		if(transfer->buffer[i]<254){
+	//int mean = 0;	
+	for(int i=0; i<realsize;i+=1){ //TODO: per accelerar..en realitat aquest buffer jo el tinc
+		//if(transfer->buffer[i]<253){
 			buff[buffindex] = transfer->buffer[i];
+			//mean+=transfer->buffer[i];
+			//buff[buffindex] = bu[i];
 			++buffindex;
-		}
-		//buff[buffindex] = bu[i];
-		//buffindex=1024;
-		if(buffindex>=1024){
+		//	printf("%d %d\n",i,transfer->buffer[i]);
+		//}
+		//buff[buffindex]=transfer->buffer[i];
+		//++buffindex;
+		//buffindex=buff_size;
+		if(buffindex>=buff_size){
+			applyeffects();
 			err = snd_pcm_writei(handle,buff,frames);
 			if(err<0){
-				printf("error snd, prepare \n");
+				printf("error snd, prepare , %s\n",strerror(errno));
 				snd_pcm_prepare(handle);
 			}
 			//printf("sent! \n");
@@ -90,66 +112,11 @@ static void callback(struct libusb_transfer* transfer){
 	libusb_submit_transfer(transfer);
 }
 
-
-static void callback_old(struct libusb_transfer* transfer){
-
-	if (transfer->status != LIBUSB_TRANSFER_COMPLETED){
-		printf("Transfer not completed. status = %d \n",transfer->status);
-		return;
-	}
-	//printf("Good transmision \n");
-	if (transfer->type == LIBUSB_TRANSFER_TYPE_ISOCHRONOUS){ //les isocrones poden tenir errors als packets
-		for(int i=0; i<transfer->num_iso_packets; ++i){
-			struct libusb_iso_packet_descriptor *packet = &transfer->iso_packet_desc[i];
-
-			if (packet->status != LIBUSB_TRANSFER_COMPLETED){
-				printf("Error in packet number %d of %d \n",i,transfer->num_iso_packets);
-				return;
-			}
-		}
-	}
-	//printf("Transfer length: %d, Actual length: %d\n",transfer->length, transfer->actual_length);	
-
-	for(int i=0; i<transfer->length; ++i){
-
-
-		temporalbuffer[tempbuf_index]=transfer->buffer[i];
-		++tempbuf_index;
-		if(lel){
-		int x = transfer->buffer[i];
-		printf("%d ",transfer->buffer[i]);
-		if(x<100) printf(" ");
-		if(x<10) printf(" ");
-		if((i%16==0)&&i!=0) printf("\n");
-		}
-	}
-	printf("p\n");
-	if(tempbuf_index >= buff_size){
-
-		for(int i=0; i<buff_size; ++i){
-			buff[i]=temporalbuffer[i];
-		}
-
-		lel=0;
-		int err = snd_pcm_writei(handle,buff,frames);
-		if(err<0){
-			printf("error snd, prepare \n");
-			snd_pcm_prepare(handle);
-		}
-		printf("sent! \n");
-		for(int i=buff_size; i<temporalbuffer_size;++i){
-			temporalbuffer[i-buff_size]=temporalbuffer[i];
-		}
-		tempbuf_index=0;
-	}
-
-	//transfer again
-	if (libusb_submit_transfer(transfer) <0){
-		//printf("Error re-submitting transfer \n");
-		//return;
-	}
-
+void applyeffects(){
+	//if(pablo>=500)echo(period,buff,buff_size,1000,3);
 }
+
+
 
 int main(void)
 {
@@ -183,18 +150,18 @@ int main(void)
 	snd_pcm_hw_params_get_period_size(params, &frames, 0);
 	buff_size = frames * channels *2; //el 2 es per el "sample size"
 	
-	temporalbuffer_size = (buff_size/ISOSIZE + ((buff_size%ISOSIZE)?1:0))*ISOSIZE;
-	temporalbuffer = malloc(temporalbuffer_size);
-	printf("temp buff size is %d \n",temporalbuffer_size);
+	//temporalbuffer_size = (buff_size/ISOSIZE + ((buff_size%ISOSIZE)?1:0))*ISOSIZE;
+	//temporalbuffer = malloc(temporalbuffer_size);
+	//printf("temp buff size is %d \n",temporalbuffer_size);
 
 	printf("buff size is %i \n" , buff_size);
 	buff= malloc(buff_size);
-	int tmp = 0;
-	snd_pcm_hw_params_get_period_time(params, &tmp, NULL);
-	printf("tmp = : %d\n",tmp);
+	//int tmp = 0;
+	snd_pcm_hw_params_get_period_time(params, &period, NULL);
+	printf("tmp = : %d\n",period);
 
 
-	int loops = (seconds*1000000)/tmp;
+	int loops = (seconds*1000000)/period;
 	printf("loops : %d\n",loops);
 
 	//open device
@@ -211,7 +178,7 @@ int main(void)
 	
 	iniusblib(ctx);
 	DeviceScan(ctx,devs);
-	libusb_device_handle *dev_handle = selectDevice(ctx,2235,10690,2,3);
+	libusb_device_handle *dev_handle = selectDevice(ctx,2235,10690,INTERFACE,ALTSETTING);
 
 	struct libusb_transfer* trans;
 
@@ -235,7 +202,7 @@ int main(void)
 		err = read(0,buff,buff_size);
 		if(err<0) printf("error de lectura. %s \n", strerror(errno));
 		
-		//echo(l,tmp,err,buff,buff_size,500,2);
+		//echo(l,period,err,buff,buff_size,500,2);
 		//synth(293,0,buff,buff_size);	
 		//if(l<20)detectNote(buff,buff_size);
 		//write
@@ -263,6 +230,7 @@ int main(void)
 }
 
 
+/*
 void echo(int loop, int period,int read, MYTYPE* buff, int buff_size,int ret, int layers){ //layers default = 1
 		if(layers<=0) layers=1;
 		if(echobuff == -1 || howmany==-1){
@@ -284,10 +252,13 @@ void echo(int loop, int period,int read, MYTYPE* buff, int buff_size,int ret, in
 			}
 		}	
 }
+*/
+
+/*
 int inside_period=-1;
 void synth(int f, int instr, MYTYPE* buff, int buff_size){
 	
-	if(inside_period==-1)inside_period=0;
+	if(inside_period==-1)inside_period=0;*/
 	
 	
 	/* deixo aixo lineal perque sona guay en plan 8 bits
@@ -308,6 +279,9 @@ void synth(int f, int instr, MYTYPE* buff, int buff_size){
 		++inside_period;
 		if(inside_period>=period_samples)inside_period=0;	
 	}*/
+
+
+/*
 	double fd = (rate*2.0)/(double)f;
 	//printf("period_samples = %lf \n", period_samples);
 	for(int i=0; i<buff_size;++i){
@@ -326,21 +300,14 @@ void synth(int f, int instr, MYTYPE* buff, int buff_size){
 	fclose(fid);
 
 	
-}
+}*/
 
+
+/*
 int detectNote( MYTYPE*buff, int buff_size){ //TODO TE UN GRAN PROBLEMA QUAN FD NO DIVIDEIX A BUFF_SIZE
 	
 	double fft_real[buff_size];
 	double fft_img[buff_size];
-
-	/*
-	int f = 600;
-	int fd = 2*rate / f;
-	double dummy[buff_size];
-	for(int i=0; i<buff_size;++i){
-		//dummy[i] = sin(2*PI*i*1/fd);
-		//printf("i : %d,  x : %lf \n",i,dummy[i]);	
-	}*/
 	//adapt
 	double adapt[buff_size];  //TODO posar aixo en el bucle intern i aixi m'estalvio bucles extres?
 	for(int i=0; i<buff_size; ++i){
@@ -400,7 +367,7 @@ int detectNote( MYTYPE*buff, int buff_size){ //TODO TE UN GRAN PROBLEMA QUAN FD 
 	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=LA;}
 	printf("nota = %d \n",nota);		
 
-}
+}*/
 
 void init(){
 
@@ -507,21 +474,23 @@ libusb_device_handle* selectDevice(libusb_context *ctx, int vid, int pid, int in
 
 void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* trans){
 	int received = 0;
-	int size = 180;
-	static uint8_t buffer[180]; //TODO: automatitzar max packet size
-	for(int i=0; i<180; ++i) buffer[i]=0;
+	//int size = 180;
+	//static uint8_t buffer[180]; //TODO: automatitzar max packet size
+	//tramabus = malloc(ISOSIZE);
+	static uint8_t tramabus[ISOSIZE];
+
+	for(int i=0; i<ISOSIZE; ++i) tramabus[i]=0;
 	int num_iso_pack = 1;
 	trans = libusb_alloc_transfer(num_iso_pack);
 	if (trans==NULL){
 		printf("Error allocating transfer");
 		exit(0);
 	}
-	libusb_fill_iso_transfer(trans,dev_handle,132,buffer,sizeof(buffer),num_iso_pack,callback,NULL,0);
-	libusb_set_iso_packet_lengths(trans,sizeof(buffer)/num_iso_pack);
+	libusb_fill_iso_transfer(trans,dev_handle,132,tramabus,sizeof(tramabus),num_iso_pack,callback,NULL,0);
+	libusb_set_iso_packet_lengths(trans,sizeof(tramabus)/num_iso_pack);
 	//TODO: recomanen enviar mes d'un packet
 
 	int r = libusb_submit_transfer(trans);
-	printf("xxx\n");
 	if(r!=0){
 		printf("Error submiting transfer \n");
 	}
