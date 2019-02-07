@@ -14,7 +14,7 @@
 #include "fft.h"
 
 #define MYTYPE char
-#define PI 3.14159265
+//#define PI 3.14159265
 #define ISOSIZE 180
 #define INTERFACE 2
 #define ALTSETTING 3
@@ -46,14 +46,14 @@ void synth(int f, int instr, MYTYPE* buff, int buff_size);
 */void applyeffects();
 
 
-int detectNote( MYTYPE* buff, int buff_size);
+//int detectNote( MYTYPE* buff, int buff_size);
 char hola;
 
 
 int buffindex=0;
 int pablo = 0;
 static void callback(struct libusb_transfer* transfer){
-	if(pablo<500)++pablo;
+	++pablo;
 	/*
 	if(pablo<50){
 		++pablo;
@@ -99,6 +99,8 @@ static void callback(struct libusb_transfer* transfer){
 		//++buffindex;
 		//buffindex=buff_size;
 		if(buffindex>=buff_size){
+			//applyeffects();
+			synth(440,0,buff,buff_size,rate);
 			applyeffects();
 			err = snd_pcm_writei(handle,buff,frames);
 			if(err<0){
@@ -113,7 +115,10 @@ static void callback(struct libusb_transfer* transfer){
 }
 
 void applyeffects(){
+	volume_adjust(buff,0,buff_size,1);
+        //for(int i=0; i<buff_size;++i) volume_adjust(buff,0,buff_size,50);		
 	//if(pablo>=500)echo(period,buff,buff_size,1000,3);
+	//if(pablo%200==0)detectNote(buff,buff_size, rate);
 }
 
 
@@ -177,7 +182,7 @@ int main(void)
 	libusb_context *ctx = NULL;
 	
 	iniusblib(ctx);
-	DeviceScan(ctx,devs);
+	//DeviceScan(ctx,devs);
 	libusb_device_handle *dev_handle = selectDevice(ctx,2235,10690,INTERFACE,ALTSETTING);
 
 	struct libusb_transfer* trans;
@@ -258,9 +263,9 @@ void echo(int loop, int period,int read, MYTYPE* buff, int buff_size,int ret, in
 int inside_period=-1;
 void synth(int f, int instr, MYTYPE* buff, int buff_size){
 	
-	if(inside_period==-1)inside_period=0;*/
+	if(inside_period==-1)inside_period=0;
 	
-	
+*/	
 	/* deixo aixo lineal perque sona guay en plan 8 bits
 	int period_samples = (rate*2)/f;
 	int quarter = period_samples/4;
@@ -289,16 +294,16 @@ void synth(int f, int instr, MYTYPE* buff, int buff_size){
 		buff[i] = (char) value;
 		++inside_period;
 		if(inside_period>=fd)inside_period=0;
-	}
+	}*/
 
 	
-	FILE* fid  = fopen("sortida2.txt", "w+");
+	/*FILE* fid  = fopen("sortida2.txt", "w+");
 	if(fid<=0)printf("lalala %s", strerror(errno));
 	for(int i=0; i<buff_size;++i){
 		fprintf(fid,"%d %d\n",i,buff[i]);
 	}
-	fclose(fid);
-
+	fclose(fid);*/
+/*
 	
 }*/
 
