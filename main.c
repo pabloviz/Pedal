@@ -14,7 +14,6 @@
 #include "fft.h"
 
 #define MYTYPE char
-//#define PI 3.14159265
 #define ISOSIZE 180
 #define INTERFACE 2
 #define ALTSETTING 3
@@ -100,7 +99,7 @@ static void callback(struct libusb_transfer* transfer){
 		//buffindex=buff_size;
 		if(buffindex>=buff_size){
 			//applyeffects();
-			synth(440,0,buff,buff_size,rate);
+			//synth(440,0,buff,buff_size,rate);
 			applyeffects();
 			err = snd_pcm_writei(handle,buff,frames);
 			if(err<0){
@@ -115,10 +114,13 @@ static void callback(struct libusb_transfer* transfer){
 }
 
 void applyeffects(){
-	volume_adjust(buff,0,buff_size,1);
-        //for(int i=0; i<buff_size;++i) volume_adjust(buff,0,buff_size,50);		
-	//if(pablo>=500)echo(period,buff,buff_size,1000,3);
+	//buff_volume_adjust(buff,0,buff_size,0.5);
+	/*if(pablo>=500)*/echo(period,buff,buff_size,2000,8);
 	//if(pablo%200==0)detectNote(buff,buff_size, rate);
+	if(pablo%200==0){
+		//distorsion(buff,buff_size,32700);
+		pablo=1;
+	}
 }
 
 

@@ -1,5 +1,8 @@
 #include "effects.h"
+#include "utils.h"
 //new
+//
+
 int howmany=-1;
 char* echobuff = (char*)-1;
 void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers default = 1
@@ -13,36 +16,51 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 			echobuff_index = 0;
 			for(int i=0; i<echobuff_size; ++i) echobuff[i]=0;
 		}
-		double power = 1.0/(double)layers+1;
+		//double power = 1.0/(double)layers+1;
 		int tmp_howmany = howmany/layers;
 		int index;
-
 		char temp[buff_size];
-		//soc un geni de les caches.
-		for(int j=1; j<=layers; ++j){
-			int samples_back = tmp_howmany*j*buff_size;//quantes mostres enrere
+		STYPE* sbuff = (STYPE*)&(buff[0]);
+		STYPE* sebuff =(STYPE*)&(echobuff[0]);
+		//double power_m=-BXS/(layers*buff_size); //en realitat el bxs esta dividinti
+		//double power;
+		for(int j=1; j<=layers; ++j)
+		{
+			double power = 1.0/((layers+1)*j*0.5);
+			int samples_back = tmp_howmany*j*buff_size;//quantes mostres enrere (8bits)
 			if (samples_back%2==1) printf("ei\n");
 			if (samples_back>howmany*buff_size){
 				printf("error\n");
 				return;
 			}
-			//printf("samples back: %d\n",samples_back);
-			for(int i=0; i<buff_size; ++i){
-				//char new = buff[i];
-				if(j==1)temp[i]=buff[i];
-				//if(j==1) echobuff[echobuff_index*buff_size + i]
-				int index = (echobuff_index*buff_size + i) - samples_back;
-				if (index<0) {
-					index = echobuff_size+index;
+			//samples_back/=BXS;//mostres enrere en 16 bits
+			//printf("shorts back %d\n",samples_back);
+			for(int i=0; i<buff_size/BXS; i+=1){
+				if(j==1){
+					temp[BXS*i]=buff[BXS*i];
+					temp[BXS*i+1]=buff[BXS*i+1];
 				}
-				buff[i] = buff[i] + echobuff[index];
-				//if(i==10)printf("im at %d, final index is %d\n",echobuff_index*buff_size + i,index);
-				//if(j==1) echobuff[echobuff_index*buff_size + i] = new;
+				int actualindex = echobuff_index*buff_size +BXS*i;//a nivell de byte
+				int ecoindex = actualindex - samples_back;
+				//printf("index %d\n",index);
+				if (ecoindex<0)ecoindex = echobuff_size+ecoindex;
+				STYPE new_value = sbuff[i];
+				//power = power_m*(l*buff_size/BXS + i)+1.0;
+				STYPE old_value = sebuff[ecoindex/BXS]*power;
+				//printf("i: %d, index:%d\n",echobuff_index*buff_size/BXS + i,index/BXS);
+				sbuff[i] = new_value+old_value;
+				//new_value = sigadd(old_value,new_value);
+				//new_value = old_value + new_value;
+				//if(new_value>65535) new_value= new_value|0xFF00;
+				//buff[i] = (new_value>>8);
+				//buff[i+1] = (new_value&0x0FF);
 			}
+
 		}
+		//buff_volume_adjust(buff,0,buff_size,0.5);
 		//actualitzar echo buffer
 		for(int i=0;i<buff_size;++i) {
-			echobuff[echobuff_index*buff_size +i] = temp[i]*(temp[i]>1);
+			echobuff[echobuff_index*buff_size +i] = temp[i]/* * (temp[i]>0)*/;
 		}
 		++echobuff_index;
 		if(echobuff_index >= howmany)echobuff_index=0;
@@ -50,6 +68,8 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 		//printf("xd: %d \n", volume_adjust(30,100));
 
 }
+
+
 //16 bits
 int detectNote( char*buff, int buff_size, int rate){ //TODO TE UN GRAN PROBLEMA QUAN FD NO DIVIDEIX A buff_size
 	buff_size/=10;
@@ -127,19 +147,20 @@ int detectNote( char*buff, int buff_size, int rate){ //TODO TE UN GRAN PROBLEMA 
 
 }
 
-
-char volume_adjust(char * buff, int ini, int buff_size,double volume){
+void buff_volume_adjust(char * buff, int ini, int buff_size,double volume){
 	//return c*volume/100;
 	//double dc = 10.0;
-	double v = volume*volume*volume;
+	//double v = volume*volume*volume;
+	short* sbuff = (short*)&(buff[0]);
 	if(ini%2==1) printf("ini ha de ser un nombre parell");
-	for(int i=0; i<buff_size; i+=2){
-		int ivalue = (buff[i]<<8) + (buff[i+1]&0x0FF);
+	for(int i=0; i<buff_size/2; i+=1){
+		sbuff[i]*=volume;
+		/*int ivalue = (buff[i]<<8) + (buff[i+1]&0x0FF);
 		int fvalue = ((double)(ivalue-32767)*v + 32767);
 		if(fvalue>65535)fvalue=65535;
 		buff[i] = fvalue>>8;
 		buff[i+1] = fvalue&0x0FF;
-		//printf("%d %d %d\n",i,ivalue,fvalue);
+		//printf("%d %d %d\n",i,ivalue,fvalue);*/
 	}
 
 	//unsigned short* sbuff = (unsigned short *)buff;
@@ -153,17 +174,15 @@ void synth(int f, int instr, char* buff, int buff_size,int rate){ //a 16 bits
 	if(inside_period==-1)inside_period=0;
 
 	double fd = (rate*2.0)/(double)f;
-	double att=0.001;
+	fd/=2.0;//interleaved
+	double att=0.01;
 	//printf("period_samples = %lf \n", period_samples);
-	for(int i=0; i<buff_size;i+=2){
-		//printf("%d\n",sizeof(short));
-		int value = (sin((inside_period*2.0*PI)/fd))*32768*att + 32766;
-		//printf("%d %d\n",i/2,value);
-		int upper = value>>8;
-		int lower = value&0x0FF;
-		buff[i] = upper;
-		buff[i+1] = lower;
-		//printf("%d %d\n",upper,lower);
+	short* sbuff = (short*)&(buff[0]);
+	for(int i=0; i<buff_size/2;i+=2){
+		////printf("%d\n",sizeof(short));
+		short value = (sin((inside_period*2.0*PI)/fd))*32767*att;
+		sbuff[i]=value;
+		sbuff[i+1]=0; //interleaved
 		++inside_period;
 		if(inside_period>=fd)inside_period=0;
 	}
@@ -178,6 +197,27 @@ void synth(int f, int instr, char* buff, int buff_size,int rate){ //a 16 bits
 
 	
 }
+
+void distorsion(char* buff, int buff_size, int dis){
+	//printf("%d -> %d\n",0xFFFE,vecToInt(0xFF,0xFF));
+	//printf("@c %d \n",(int)buff);
+	short* sbuff = (short*)&(buff[0]);
+	//printf("@s %d \n",(int)sbuff);
+	for(int i=0; i<buff_size/2; ++i){
+		printf("%d %d\n",i,sbuff[i]);
+	}
+	/*
+	for(int i=0; i<buff_size; i+=2){
+		int value = vecToInt(buff[i+1],buff[i]);
+		printf("%d %d\n",i/2,value);		
+	}*/	
+}
+
+
+
+
+
+
 void printbuff(char* buff, int buff_size){
 
 	for(int i=0; i<buff_size;i+=2){
