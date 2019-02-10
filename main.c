@@ -99,13 +99,15 @@ static void callback(struct libusb_transfer* transfer){
 		//buffindex=buff_size;
 		if(buffindex>=buff_size){
 			//applyeffects();
-			//synth(440,0,buff,buff_size,rate);
 			applyeffects();
 			err = snd_pcm_writei(handle,buff,frames);
 			if(err<0){
 				printf("error snd, prepare , %s\n",strerror(errno));
 				snd_pcm_prepare(handle);
 			}
+			/*if(pablo%200==0){detectNote(buff,buff_size,rate);
+				pablo=1;
+			}*/
 			//printf("sent! \n");
 			buffindex=0;
 		}
@@ -114,13 +116,24 @@ static void callback(struct libusb_transfer* transfer){
 }
 
 void applyeffects(){
+	
+	//echo(period,buff,buff_size,2000,8);
+	distorsion(buff,buff_size,19.3);
+
+	//printbuff(buff,buff_size);
 	//buff_volume_adjust(buff,0,buff_size,0.5);
-	/*if(pablo>=500)*/echo(period,buff,buff_size,2000,8);
-	//if(pablo%200==0)detectNote(buff,buff_size, rate);
-	if(pablo%200==0){
-		//distorsion(buff,buff_size,32700);
+	/*if(pablo>=500)*///echo(period,buff,buff_size,2000,8);
+	
+	//synth(700,0,buff,buff_size,rate);
+	/*if(pablo%200==0){
+		printbuff(buff,buff_size);
+		//detectNote(buff,buff_size, rate);
 		pablo=1;
-	}
+	}*/
+	/*if(pablo%200==0){
+		distorsion(buff,buff_size,32700);
+		pablo=1;
+	}*/
 }
 
 

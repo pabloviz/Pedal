@@ -26,7 +26,9 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 		//double power;
 		for(int j=1; j<=layers; ++j)
 		{
-			double power = 1.0/((layers+1)*j*0.5);
+			double power = (double)layers/((layers+1)*j*4.0);
+			//double power = 1.0/((layers+1)*j*1.0);
+			//if(j==layers) power = 0.05;
 			int samples_back = tmp_howmany*j*buff_size;//quantes mostres enrere (8bits)
 			if (samples_back%2==1) printf("ei\n");
 			if (samples_back>howmany*buff_size){
@@ -48,6 +50,7 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 				//power = power_m*(l*buff_size/BXS + i)+1.0;
 				STYPE old_value = sebuff[ecoindex/BXS]*power;
 				//printf("i: %d, index:%d\n",echobuff_index*buff_size/BXS + i,index/BXS);
+				//TODO overflow control, maybe in sigadd function
 				sbuff[i] = new_value+old_value;
 				//new_value = sigadd(old_value,new_value);
 				//new_value = old_value + new_value;
@@ -71,56 +74,58 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 
 
 //16 bits
-int detectNote( char*buff, int buff_size, int rate){ //TODO TE UN GRAN PROBLEMA QUAN FD NO DIVIDEIX A buff_size
-	buff_size/=10;
-	
-	double fft_real[buff_size/2];
-	double fft_img[buff_size/2];
+int detectNote( char*buff, int buff_size, int rate){
+	//buff_size/=2;
+	//esta interleaved, no agafem les mostres senars
+	rate = 48000;
+	int N = buff_size/BXS;
+	int reduction = 2;
+	double fft_mag[N/reduction];
 	//adapt
-	double adapt[buff_size/2];  //TODO posar aixo en el bucle intern i aixi m'estalvio bucles extres?
-	for(int i=0; i<buff_size; i+=2){
-		int upper = (int)buff[i];
-		int lower = (int)buff[i+1];
-
-		int tmp = (upper<<8) + (lower&0x0FF);
-		//printf("tmp : %d\n",tmp);
-		//printf("upper: %d; lower: %d\n",upper,lower);
-		adapt[i/2] = (double)((tmp-32767))/32768.0;
-		//aplicar hann
-		//adapt[i] *= 0.53836 - 0.46164*cos((2*PI*i)/buff_size-1);
-		//printf("%d %lf\n",i/2,adapt[i/2]);
+	double adapt[N];	
+	STYPE * sbuff = (STYPE *)&(buff[0]);
+	for(int i=0; i<N; i+=2){ //TODO: en comptes de duplicar, reduir a la meitat! el rate tb
+		double tmp = ((double)(sbuff[i])/32767)*(0.5-0.5*cos((2.0*PI*i)/(N-1)));
+		adapt[i] = tmp;
+		adapt[i+1] = tmp; //interleaved
+		//printf("%lf\n%lf\n",i,adapt[i],adapt[i+1]);
 	}
-	//return;
-
-	for(int k=0; k<buff_size/2; ++k){
+	//printf("\n\n\n");
+	
+	for(int k=0; k<N/reduction; ++k){
 		double tmp = 0.0;
 		double tmpi = 0.0;
-		for(int i=0; i<buff_size/2; ++i){
-			//inputreal[i] = cos(((double)buff[i]*2*PI*i)/buff_size);
-			//inputimg[i]  = sin(((double)buff[i]*2*PI*i)/buff_size);
-			double tmp2 = ((2*PI*k*i)/(double)buff_size/2)*adapt[i];
-			tmp += cos(tmp2);
-			tmpi -= sin(tmp2);
+		for(int i=0; i<N; ++i){
+			double tmp2 = ((2*PI*k*i)/(double)N);
+			tmp  += cos(tmp2)*adapt[i];
+			tmpi += sin(tmp2)*adapt[i];
 		}
-		fft_real[k]=tmp/(buff_size/2);
-		fft_img[k]=tmpi/(buff_size/2);
+		double d = tmp*tmp + tmpi*tmpi;
+		if(d<0)d=0;
+		fft_mag[k] = sqrt(d);
 	}
-	//double fft_final[buff_size];
-	//for(int i=0; i<buff_sizze
-
-	//Fft_transform(inputreal,inputimg,buff_size);
 	double max = 0;
 	int pos=0;
-	for(int i=1; i<buff_size/2; ++i){
-		double f = sqrt(fft_real[i]*fft_real[i]+fft_img[i]*fft_img[i]);
-		if(f>max){
-		       	max=f;
+	for(int i=1; i<N/reduction; ++i){
+		if(fft_mag[i]>max){
+		       	max=fft_mag[i];
 			pos=i;
 		}
-	//	printf("i: %d, real: %lf, img: %lf, final :%lf \n",i,fft_real[i],fft_img[i],f);
 	}
-	//printf("fft : %d \n",pos);
-	double result = ((double)pos/(double)buff_size)*2.0*(double)rate;
+	int limit = (pos<10?pos:pos/2);
+	double nom=pos*fft_mag[pos];
+	double den=fft_mag[pos];
+	for(int i=1; i<3;++i){
+		nom += (pos-i)*fft_mag[pos-i];
+		den += fft_mag[pos-i];
+
+		nom += (pos+i)*fft_mag[pos+i];
+		den += fft_mag[pos+i];
+	}
+
+	//printf("fft : %lf \n",nom/den);
+	double result = (rate*nom*BXS)/(N*den);
+	//double result = ((double)pos/(double)buff_size)*BXS*(double)rate;
 	printf("result : %lf \n",result);
 	/*int nota = 0;
 	double ratio = (DO>result ? DO/result : result/DO);
@@ -198,13 +203,28 @@ void synth(int f, int instr, char* buff, int buff_size,int rate){ //a 16 bits
 	
 }
 
-void distorsion(char* buff, int buff_size, int dis){
+void distorsion(char* buff, int buff_size, double dis){
 	//printf("%d -> %d\n",0xFFFE,vecToInt(0xFF,0xFF));
 	//printf("@c %d \n",(int)buff);
 	short* sbuff = (short*)&(buff[0]);
 	//printf("@s %d \n",(int)sbuff);
-	for(int i=0; i<buff_size/2; ++i){
-		printf("%d %d\n",i,sbuff[i]);
+	/*
+	int max=0;
+	for(int i=0; i<buff_size/BXS; ++i){
+		if(sbuff[i]>0 && sbuff[i]>max) max = sbuff[i];
+		else if (sbuff[i]<0 && sbuff[i]<-max) max = -sbuff[i];
+
+	}*/
+
+	for(int i=0; i<buff_size/BXS; ++i){
+		int limit = -1639*dis + 32767;
+		int r = rand()%100;
+		r=0;
+		if(r%2==0) r = -r;
+		if (sbuff[i]>limit) sbuff[i]=limit+r;
+		else if (sbuff[i]<-limit) sbuff[i]=-limit+r;
+
+		//printf("%d %d\n",i,sbuff[i]);
 	}
 	/*
 	for(int i=0; i<buff_size; i+=2){
@@ -220,8 +240,9 @@ void distorsion(char* buff, int buff_size, int dis){
 
 void printbuff(char* buff, int buff_size){
 
-	for(int i=0; i<buff_size;i+=2){
-		short s = buff[i]<<8 + buff[i+1];
-		printf("%d %d\n",i,s);
+	STYPE* sbuff = (STYPE*)(&buff[0]);
+	for(int i=0; i<buff_size/BXS;i+=2){
+		STYPE s = sbuff[i];
+		printf("%d\n%d\n",s,s);
 	}
 }
