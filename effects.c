@@ -20,6 +20,7 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 		int tmp_howmany = howmany/layers;
 		int index;
 		char temp[buff_size];
+		for(int i=0; i<buff_size;++i) temp[i] = buff[i];
 		STYPE* sbuff = (STYPE*)&(buff[0]);
 		STYPE* sebuff =(STYPE*)&(echobuff[0]);
 		//double power_m=-BXS/(layers*buff_size); //en realitat el bxs esta dividinti
@@ -38,10 +39,6 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 			//samples_back/=BXS;//mostres enrere en 16 bits
 			//printf("shorts back %d\n",samples_back);
 			for(int i=0; i<buff_size/BXS; i+=1){
-				if(j==1){
-					temp[BXS*i]=buff[BXS*i];
-					temp[BXS*i+1]=buff[BXS*i+1];
-				}
 				int actualindex = echobuff_index*buff_size +BXS*i;//a nivell de byte
 				int ecoindex = actualindex - samples_back;
 				//printf("index %d\n",index);
@@ -49,9 +46,12 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 				STYPE new_value = sbuff[i];
 				//power = power_m*(l*buff_size/BXS + i)+1.0;
 				STYPE old_value = sebuff[ecoindex/BXS]*power;
+				//if(old_value<50 && old_value>-50)old_value=0;
 				//printf("i: %d, index:%d\n",echobuff_index*buff_size/BXS + i,index/BXS);
-				//TODO overflow control, maybe in sigadd function
-				sbuff[i] = new_value+old_value;
+				if(((int)new_value + (int)old_value )>32767) sbuff[i]=32767;
+				else if (((int)new_value + (int)old_value)<-32767) sbuff[i] = -32767;
+				
+				else sbuff[i] = new_value+old_value;
 				//new_value = sigadd(old_value,new_value);
 				//new_value = old_value + new_value;
 				//if(new_value>65535) new_value= new_value|0xFF00;
@@ -63,7 +63,7 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 		//buff_volume_adjust(buff,0,buff_size,0.5);
 		//actualitzar echo buffer
 		for(int i=0;i<buff_size;++i) {
-			echobuff[echobuff_index*buff_size +i] = temp[i]/* * (temp[i]>0)*/;
+			echobuff[echobuff_index*buff_size +i] = temp[i]/* (temp[i]>50 || temp[i]<-50)*/;
 		}
 		++echobuff_index;
 		if(echobuff_index >= howmany)echobuff_index=0;
@@ -74,29 +74,58 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 
 
 //16 bits
+STYPE * detectbuff = (STYPE *)-1;
+int detectbuff_size;
+int detectbuff_howmany=10;
+int counter=0;
 int detectNote( char*buff, int buff_size, int rate){
+
+	STYPE * sbuff = (STYPE *)&(buff[0]);
+	for(int i=0; i<buff_size/BXS;++i){
+		if(sbuff[i]>100) goto jeje;
+	}
+	return -10;
+	jeje:
+	if(detectbuff==(STYPE*)-1){
+		detectbuff_size = detectbuff_howmany*buff_size/(2); //diria que el 2 es per l'interleaved
+		detectbuff = (STYPE *)malloc(detectbuff_size);
+	}
+	if(counter==detectbuff_howmany){ counter=0;}
+	else{
+		for(int i=0; i<buff_size/BXS; i+=2){
+			detectbuff[i/2 + counter*buff_size/(BXS*2)]=sbuff[i];
+		}
+		++counter;
+		return -1;
+	}
+	
+	//exit(0);
 	//buff_size/=2;
 	//esta interleaved, no agafem les mostres senars
-	rate = 48000;
-	int N = buff_size/BXS;
-	int reduction = 2;
+	//rate = 414000;
+	//int N = buff_size/BXS;
+	int N = detectbuff_size/BXS;
+	int reduction = 15;
 	double fft_mag[N/reduction];
 	//adapt
-	double adapt[N];	
-	STYPE * sbuff = (STYPE *)&(buff[0]);
-	for(int i=0; i<N; i+=2){ //TODO: en comptes de duplicar, reduir a la meitat! el rate tb
-		double tmp = ((double)(sbuff[i])/32767)*(0.5-0.5*cos((2.0*PI*i)/(N-1)));
+	double adapt[N];
+	//printf("N: %d\n",N);	
+	for(int i=0; i<N; i+=1){
+		//printf("%d\n",detectbuff[i]);
+		double tmp = ((double)(detectbuff[i])/32767)*(0.5-0.5*cos((2.0*PI*i)/(2*N-1)));
 		adapt[i] = tmp;
-		adapt[i+1] = tmp; //interleaved
-		//printf("%lf\n%lf\n",i,adapt[i],adapt[i+1]);
-	}
-	//printf("\n\n\n");
+		//adapt[i+1] = tmp; //interleaved
+		//printf("%lf\n",adapt[i]);
+	}	
+	//printf("\n\nbuscam\n\n");
+	//exit(0);
+	//return;
 	
 	for(int k=0; k<N/reduction; ++k){
 		double tmp = 0.0;
 		double tmpi = 0.0;
 		for(int i=0; i<N; ++i){
-			double tmp2 = ((2*PI*k*i)/(double)N);
+			double tmp2 = ((2*PI*k*(i))/(double)N);
 			tmp  += cos(tmp2)*adapt[i];
 			tmpi += sin(tmp2)*adapt[i];
 		}
@@ -104,29 +133,42 @@ int detectNote( char*buff, int buff_size, int rate){
 		if(d<0)d=0;
 		fft_mag[k] = sqrt(d);
 	}
-	double max = 0;
+	double max = -100.0;
 	int pos=0;
-	for(int i=1; i<N/reduction; ++i){
+	for(int i=2; i<N/reduction; ++i){
+		//printf("%lf\n",fft_mag[i]);
 		if(fft_mag[i]>max){
-		       	max=fft_mag[i];
-			pos=i;
-		}
+		       	if(fft_mag[i]>1){
+				max=fft_mag[i];
+				pos=i;
+			}
+		}else break;
 	}
-	int limit = (pos<10?pos:pos/2);
+	//printf("\n\n\n\n");
+	
+	int limit = (pos<10?pos:pos);
 	double nom=pos*fft_mag[pos];
 	double den=fft_mag[pos];
-	for(int i=1; i<3;++i){
+	for(int i=1; i<limit;++i){
 		nom += (pos-i)*fft_mag[pos-i];
 		den += fft_mag[pos-i];
 
 		nom += (pos+i)*fft_mag[pos+i];
 		den += fft_mag[pos+i];
 	}
+	nom = pos;
+	den = 1;
+	//printf("%lf\n",nom/den);
+	//double nom = (double)pos;
+	//double den = 1.0;
 
 	//printf("fft : %lf \n",nom/den);
 	double result = (rate*nom*BXS)/(N*den);
+	//return (int)result;
 	//double result = ((double)pos/(double)buff_size)*BXS*(double)rate;
-	printf("result : %lf \n",result);
+	//printf("result : %lf \n",result);
+	return (int)result;
+//	exit(0);
 	/*int nota = 0;
 	double ratio = (DO>result ? DO/result : result/DO);
 	double mindist = fabs(ratio-(int)ratio);
@@ -202,11 +244,29 @@ void synth(int f, int instr, char* buff, int buff_size,int rate){ //a 16 bits
 
 	
 }
-
-void distorsion(char* buff, int buff_size, double dis){
+//int pos = -1;
+//int posn = -1;
+//int pablito=0;
+void distorsion(char* buff, int buff_size, double dis, int tipo){
 	//printf("%d -> %d\n",0xFFFE,vecToInt(0xFF,0xFF));
 	//printf("@c %d \n",(int)buff);
 	short* sbuff = (short*)&(buff[0]);
+	/*
+	if(pablito==0){
+		for(int i=0; i<buff_size/BXS -50;i+=2){
+			sbuff[i] = -1000;
+		}
+		for(int i=buff_size/BXS -50; i<buff_size/BXS; i+=2){
+			sbuff[i] = -1500;
+		}
+	}else if (pablito==1){
+		for(int i=0; i<50;++i){
+			sbuff[i] = -2000;
+		}for(int i=50; i<buff_size/BXS; i+=2){
+			sbuff[i] = -1000;
+		}
+	}
+	++pablito;*/	
 	//printf("@s %d \n",(int)sbuff);
 	/*
 	int max=0;
@@ -215,15 +275,73 @@ void distorsion(char* buff, int buff_size, double dis){
 		else if (sbuff[i]<0 && sbuff[i]<-max) max = -sbuff[i];
 
 	}*/
+	int limit = -1639*dis + 32767;
+	//printf("limit: %d\n",limit);
+	int pos = -1;
+	int posn = -1;
+	int a,b;
+	double l;
+	//int tipo = 2;//0:linear, 1:quadratic, 2:cubic, 3:atenuation
+	for(int i=0; i<buff_size/BXS; i+=2){
+		if (sbuff[i]>limit && pos==-1) {//obrim
+			if(tipo!=0)pos=i;
+			else sbuff[i]=limit;
+		}else if ((i==(buff_size/BXS)-2 || sbuff[i]<limit) && pos!=-1){//tanquem
+			if(tipo==1){
+				quadunion(sbuff,buff_size,pos,i,limit,5);
+			}else if(tipo==2){
+				if(pos==0){
+					int lon = (i-pos)/2;
+					if(lon%2!=0)++lon;
+					quadunion(sbuff,buff_size,0,lon,limit,5);
+					quadunion(sbuff,buff_size,lon,i,limit,-5);
+				}
+				if(i==(buff_size/BXS)-2){
+					quadunion(sbuff,buff_size,pos,i,limit,-5);
+				}else if(pos!=0){
+					int lon = (i-pos)/3;
+					if (lon%2!=0)++lon;
+					int l1 = pos + lon;
+					int l2 = l1 + lon;
+					quadunion(sbuff,buff_size,pos,l1,limit,-5);
+					quadunion(sbuff,buff_size,l1,l2,limit,5);
+					quadunion(sbuff,buff_size,l2,i,limit,-5);
+				}
+			}else if(tipo==3){
+				for(int j=pos;j<=i;j+=2)sbuff[j]=((sbuff[j]-limit)*0.5)+limit;
+			}
+			pos = -1;	
+		}else if (sbuff[i]<-limit && posn==-1){//obrim
+			if(tipo!=0)posn=i;
+			else sbuff[i]=-limit;
+		}else if ((i==(buff_size/BXS)-2 ||sbuff[i]>-limit) && posn!=-1){//tanquem
+			if(tipo==1){
+				quadunion(sbuff,buff_size,posn,i,-limit,-5);
+			}
+			else if(tipo==2){
+				if(posn==0){
+					int lon = (i-posn)/2;
+					if(lon%2!=0)++lon;
+					quadunion(sbuff,buff_size,0,lon,-limit,-5);
+					quadunion(sbuff,buff_size,lon,i,-limit,5);
+				}else if(i==(buff_size/BXS)-2){
+					quadunion(sbuff,buff_size,posn,i,-limit,5);
+				}else{
+					int lon = (i-posn)/3;
+					if(lon%2!=0)++lon;
+					int l1 = posn +lon;
+					int l2 = l1 + lon;
+					quadunion(sbuff,buff_size,posn,l1,-limit,5);
+					quadunion(sbuff,buff_size,l1,l2,-limit,-5);
+					quadunion(sbuff,buff_size,l2,i,-limit,5);
+				}
+			}else if(tipo==3){
+				for(int j=pos;j<=i;j+=2)sbuff[j]=((sbuff[j]+limit)*0.5)-limit;
 
-	for(int i=0; i<buff_size/BXS; ++i){
-		int limit = -1639*dis + 32767;
-		int r = rand()%100;
-		r=0;
-		if(r%2==0) r = -r;
-		if (sbuff[i]>limit) sbuff[i]=limit+r;
-		else if (sbuff[i]<-limit) sbuff[i]=-limit+r;
+			}
 
+			posn=-1;
+		}
 		//printf("%d %d\n",i,sbuff[i]);
 	}
 	/*
@@ -243,6 +361,7 @@ void printbuff(char* buff, int buff_size){
 	STYPE* sbuff = (STYPE*)(&buff[0]);
 	for(int i=0; i<buff_size/BXS;i+=2){
 		STYPE s = sbuff[i];
-		printf("%d\n%d\n",s,s);
+		printf("%d\n",s);
 	}
+	printf("\n\n\naaaaaaaaaaa\n\n\n");
 }

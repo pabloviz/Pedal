@@ -49,18 +49,17 @@ void synth(int f, int instr, MYTYPE* buff, int buff_size);
 char hola;
 
 
+void trap(){
+	while(1);
+}
+
+
 int buffindex=0;
 int pablo = 0;
 static void callback(struct libusb_transfer* transfer){
 	++pablo;
-	/*
-	if(pablo<50){
-		++pablo;
-		libusb_submit_transfer(transfer);
-		return;
-	}
-	pablo=0;*/
-	
+	//int nt = omp_get_thread_num();
+	//printf("%d\n",nt);
 	if (transfer->status != LIBUSB_TRANSFER_COMPLETED){
 		printf("Transfer not completed. status = %d \n",transfer->status);
 		return;
@@ -114,22 +113,67 @@ static void callback(struct libusb_transfer* transfer){
 	}
 	libusb_submit_transfer(transfer);
 }
-
+int th1_start=0;
+int th1_valid=0;
+int nota;
+int playnota=0;
 void applyeffects(){
+
+	if(th1_valid==1){
+		//th1_valid=0;
+		//printf("ei: %d\n",nota);
+		playnota=nota*(playnota!=-10);
+		th1_valid=0;
+	}
+	th1_start=1;
+	synth(playnota,0,buff,buff_size,rate);
+/*
+	//#pragma omp single
+	if(omp_get_thread_num()==1){
+
+		while(1);
+bucle:
+	        while(!th1_start);
+		th1_start=0;
+	        int note = detectNote(buff,buff_size,rate);
+	        if(note>10) th1_valid=1;
+		goto bucle;
+
+	}
+	
+	if(omp_get_thread_num()==0){
+		return;
+		th1_start=1;
+		if(th1_valid==1){ 
+			//synth(note,0,buff,buff_size,rate);
+			th1_valid==0;
+			th1_start=1;
+		}
+
+	}*/
+	//return;
+	
+
+
+	
 	
 	//echo(period,buff,buff_size,2000,8);
-	distorsion(buff,buff_size,19.3);
+	//distorsion(buff,buff_size,19.3,2);
 
-	//printbuff(buff,buff_size);
+//	printbuff(buff,buff_size);
+	//
+	//
 	//buff_volume_adjust(buff,0,buff_size,0.5);
 	/*if(pablo>=500)*///echo(period,buff,buff_size,2000,8);
 	
-	//synth(700,0,buff,buff_size,rate);
-	/*if(pablo%200==0){
-		printbuff(buff,buff_size);
+	//synth(1318,0,buff,buff_size,rate);
+	//printf("%d\n",pablo);
+	//if(pablo>=250){
+		//printbuff(buff,buff_size);
 		//detectNote(buff,buff_size, rate);
-		pablo=1;
-	}*/
+		//if(pablo==202)pablo=;
+	//}
+	//exit(0);
 	/*if(pablo%200==0){
 		distorsion(buff,buff_size,32700);
 		pablo=1;
@@ -204,12 +248,32 @@ int main(void)
 
 	iniTransmission(dev_handle,trans);
 
-	int r;	
+	int r;
+
+	omp_set_num_threads(2);
+	#pragma omp single
+	#pragma omp parallel
 	while(1){
-		r = libusb_handle_events(NULL);
-		if(r != LIBUSB_SUCCESS){
-			printf("libusb handle events unsuccesfull \n");
-			return 0;
+		if(omp_get_thread_num()==0){
+			r = libusb_handle_events(NULL);
+			if(r != LIBUSB_SUCCESS){
+				printf("libusb handle events unsuccesfull \n");
+				//return 0;
+			}
+		}else{
+			while(omp_get_thread_num()==1){
+				while(!th1_start);
+				th1_start=0;
+				nota = detectNote(buff,buff_size,rate);
+				//printf("nota: %d\n", nota);
+				if(nota>100 || nota==-10){
+					th1_valid=1;
+					//printf("nota: %d\n",nota);
+				}
+				while(th1_valid==1);//espera a la consumicio
+				//else th1_valid=0;
+			}
+
 		}
 	}
 	return 0;

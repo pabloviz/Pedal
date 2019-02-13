@@ -3,6 +3,6 @@
 #	gcc openusb.c -o openusb.o
 
 main.o: main.c notes.h effects.c effects.h utils.c utils.h defines.h
-	gcc  main.c effects.c utils.c -o main.o -lasound -lm -lusb-1.0
+	gcc  main.c effects.c utils.c -o main.o -lasound -lm -lusb-1.0 -fopenmp
 clean:
 	rm main.o
