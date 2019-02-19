@@ -2,40 +2,7 @@
 #include "utils.h"
 //new
 //
-double cachedvalue = -1;
-void echo(char* buff, int buff_size, char* savedbuff, int savedbuff_size,
-	int savedbuff_pos, int bpm, double when, int howlong){
 
-	if(when<0.0 || howlong*1000>SAVED_mSECONDS || bpm<0){
-		printf("invalid parameters for echo \n");
-		return;
-	}
-	if(cachedvalue==-1) cachedvalue = (double)savedbuff_size*60.0*1000.0;
-	double bytes_per_beat = cachedvalue/((double)bpm*SAVED_mSECONDS);
-	double bytes_back = bytes_per_beat * when;
-	if (bytes_back == savedbuff_size) bytes_back -= 1024.0;
-
-	STYPE* sbuff  = (STYPE*)(&buff[0]);
-	STYPE* ssaved = (STYPE*)(&savedbuff[0]);
-
-	for(int it=1; it<=howlong; ++it){
-		int index = savedbuff_pos - (int)bytes_back*it - buff_size;
-		if (index < 0) index = savedbuff_size + index;
-		index /= BXS;
-		if(index%2==1)--index;
-		for (int i=0; i<buff_size/BXS; i+=2){
-			STYPE old_value = ssaved[index+i];
-			if ((int)sbuff[i] + (int)old_value >= 32767) sbuff[i]=32767;
-			else if ((int)sbuff[i] + (int)old_value <= -32767) sbuff[i]=-32767;
-			else sbuff[i] = sbuff[i] + old_value;
-		}
-	}
-
-
-
-}
-
-/*
 int howmany=-1;
 char* echobuff = (char*)-1;
 void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers default = 1
@@ -96,14 +63,14 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 		//buff_volume_adjust(buff,0,buff_size,0.5);
 		//actualitzar echo buffer
 		for(int i=0;i<buff_size;++i) {
-			echobuff[echobuff_index*buff_size +i] = temp[i];
+			echobuff[echobuff_index*buff_size +i] = temp[i]/* (temp[i]>50 || temp[i]<-50)*/;
 		}
 		++echobuff_index;
 		if(echobuff_index >= howmany)echobuff_index=0;
 
 		//printf("xd: %d \n", volume_adjust(30,100));
 
-}*/
+}
 
 
 //16 bits

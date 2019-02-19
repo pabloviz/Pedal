@@ -15,7 +15,10 @@ int howmany;
 char * echobuff;
 int echobuff_size;
 int echobuff_index;
-void echo(int period, char* buff, int buff_size,int ret, int layers);
+//void echo(int period, char* buff, int buff_size,int ret, int layers);
+
+void echo(char* buff, int buff_size, char* savedbuff, int savedbuff_size,
+	  int savedbuff_pos, int bpm, double when, int howlong);
 
 void buff_volume_adjust(char * buff, int ini, int fin,double volume);
 int detectNote(char*buff, int buff_size,int rate); //TODO TE UN GRAN PROBLEMA QUAN FD NO DIVIDEIX A BUFF_SIZE

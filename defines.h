@@ -1,6 +1,7 @@
 #define STYPE short
 #define BXS 2 //bytes per sample
 #define PI 3.14159265
+#define SAVED_mSECONDS 5000
 #define BTN_DIST 13
 #define BTN_ECHO 19
 #define BTN_SYNT 26

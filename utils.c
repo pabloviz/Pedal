@@ -47,19 +47,23 @@ void quadunion(STYPE * buff, int buff_size, int A, int B, int Y, int power){
 	int vx = A + ((B-A)/2);
 	int vy = Y - power;
 	double l = ((double)(Y-vy))/((B-vx)*(B-vx));
-	//printf("A: %d, B: %d, Y: %d, power: %d, vx: %d, Vy: %d, l: %hf\n",A,B,Y,power,vx,vy, l);
-	//if(vy>Y) l= -l;
 	for(int i=A; i<=B; i+=2){
 		buff[i] = l*(i-vx)*(i-vx) + vy;	
 	}
+}
+void savebuff(char * buff_f, int buff_size_f, char * buff_d, int buff_size_d, int* pos){
+	//printf("starting savebuff. pos = %d\n",*pos);
+	int p = *pos;
+	for (int i=0; i<buff_size_f; i+=1){ //INTERLEAVED
+		if(p>=buff_size_d) p=0;
+		buff_d[p]= buff_f[i];
+		++p;
+		//buff_d[p+1] = buff_f[i+1]; //INTERLEAVED
+		//p+=2; //INTERLEAVED
+	}
+	//p+=1024;
+	//if(p==buff_size_d)p=0;
+	*pos = p;
+	//printf("ending savebuff. pos = %d\n",*pos);
 
-	//quadunion(sbuff,buff_size,pos,i,-limit,-100);
-	//}
-	/*
-	a = -(((i-posn)/2)+posn);
-	b = -limit-100;
-	l = (100.0)/((i+a)*(i+a));
-	for(int j=posn;j<=i;++j){
-		if(tipo==1)sbuff[j]=l*(j+a)*(j+a) + b;
-	}*/
 }

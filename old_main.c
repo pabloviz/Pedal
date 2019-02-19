@@ -29,12 +29,10 @@ int channels = 2;
 int seconds = 5;
 snd_pcm_sframes_t frames;
 char* buff;
-char* savedbuff;
-int pos_in_savedbuff;
+char* th1buff;
 int period;
 //char *tramabus;
 int buff_size;
-int savedbuff_size;
 int mask = 0;
 int nthreads=0;
 
@@ -61,6 +59,11 @@ void synth(int f, int instr, MYTYPE* buff, int buff_size);
 char hola;
 
 
+void trap(){
+	while(1);
+}
+
+
 int buffindex=0;
 int pablo = 0;
 double ttime = 0;
@@ -84,7 +87,7 @@ static void callback(struct libusb_transfer* transfer){
 
 
 	//printf("thread num %d\n",omp_get_thread_num());
-	if(pablo<200)++pablo;
+	++pablo;
 	if (transfer->status != LIBUSB_TRANSFER_COMPLETED){
 		printf("Transfer not completed. status = %d \n",transfer->status);
 		return;
@@ -103,14 +106,11 @@ static void callback(struct libusb_transfer* transfer){
 	int err;
 	//char bu[realsize];	
 	//read(0,bu,realsize);	
-	for(int i=0; i<realsize;i+=1){
+	for(int i=0; i<realsize;i+=1){ //TODO: per accelerar..en realitat aquest buffer jo el tinc
 		buff[buffindex] = transfer->buffer[i];
 		//buff[buffindex] = bu[i];
 		++buffindex;
 		if(buffindex>=buff_size){
-			savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
-			//printf("pos_in_savedbuff : %d\n",pos_in_savedbuff);
-			echo(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff,120,0.5,2);
 			//applyeffects();
 			err = snd_pcm_writei(handle,buff,frames);
 			if(err<0){
@@ -143,14 +143,14 @@ void applyeffects(){
 			th1_valid=0;
 		}
 		if(th1_ready==1){
-			//for(int i=0; i<buff_size; ++i) th1buff[i]=buff[i];
+			for(int i=0; i<buff_size; ++i) th1buff[i]=buff[i];
 			th1_start=1;
 		}
 		if(playnota>100)synth(playnota,0,buff,buff_size,rate);
 		else bufftozero(buff,0,buff_size);
 	}	
 	if(mask&0x02){
-		//echo(period,buff,buff_size,echo_time,echo_reps);
+		echo(period,buff,buff_size,echo_time,echo_reps);
 	}
 	if(mask&0x04){
 		distorsion(buff,buff_size,dist_ammount,dist_type);
@@ -193,8 +193,68 @@ int main(int argc, char* argv[])
 	gpio_setInput(BTN_VLUP);
 	gpio_setInput(BTN_VLUP);
 	gpio_setInput(BTN_VLDW);
+	//init_output();
+/*
+	//PCM = pulse code modulation
+	//open PCM
+	 err = snd_pcm_open(&handle,device,SND_PCM_STREAM_PLAYBACK,0);
+	if(err<0){
+		printf("Playback open error: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	//allocate parameteres object, default values
+	snd_pcm_hw_params_alloca(&params);
+	snd_pcm_hw_params_any(handle,params);
+	//set params
+	err = snd_pcm_hw_params_set_access(handle,params,SND_PCM_ACCESS_RW_INTERLEAVED);
+	if(err<0) printf("Cant set inreleaved mode. %s \n", strerror(errno));
+
+	err = snd_pcm_hw_params_set_format(handle,params,SND_PCM_FORMAT_S16_LE);
+	if(err<0) printf("Cant set format. %s \n", strerror(errno));
+	
+	err = snd_pcm_hw_params_set_channels(handle,params,channels);
+	if(err<0) printf("Cant set channels number. %s \n", strerror(errno));
+	
+	err = snd_pcm_hw_params_set_rate_near(handle,params,&rate,0);
+	if(err<0) printf("Cant set rate. %s \n", strerror(errno));
+	//write params
+	err = snd_pcm_hw_params(handle,params);
+	if(err<0) printf("Cant write params. %s \n", strerror(errno));
+	snd_pcm_hw_params_get_period_size(params, &frames, 0);
+	buff_size = frames * channels *2; //el 2 es per el "sample size"
+	
+	//temporalbuffer_size = (buff_size/ISOSIZE + ((buff_size%ISOSIZE)?1:0))*ISOSIZE;
+	//temporalbuffer = malloc(temporalbuffer_size);
+	//printf("temp buff size is %d \n",temporalbuffer_size);
+
+	printf("buff size is %i \n" , buff_size);
+	buff= malloc(buff_size);
+	th1buff = malloc(buff_size);
+	//int tmp = 0;
+	snd_pcm_hw_params_get_period_time(params, &period, NULL);
+	printf("tmp = : %d\n",period);
+
+
+	int loops = (seconds*1000000)/period;
+	printf("loops : %d\n",loops);
+*/
+	//usb
+	/*
+
+	libusb_device **devs = NULL;
+	//libusb_device_handle *dev_handle;
+	libusb_context *ctx = NULL;
+	
+	iniusblib(ctx);
+	//DeviceScan(ctx,devs);
+	libusb_device_handle *dev_handle = selectDevice(ctx,2235,10690,INTERFACE,ALTSETTING);
+
+	struct libusb_transfer* trans;
+
+	iniTransmission(dev_handle,trans);
+*/
 	int r;
-	nthreads=1;
+	nthreads=2;
 	//goto th0;
 	omp_set_num_threads(nthreads);
 	#pragma omp parallel
@@ -229,15 +289,7 @@ int main(int argc, char* argv[])
 
 void th0_work(){
 
-	init_output();
-	savedbuff_size = (1000*SAVED_mSECONDS)/period;
-	savedbuff_size *= buff_size;
-	savedbuff_size;
-	//savedbuff_size /= 2; //INTERLEAVED
-	printf("savedbuff_size = %d\n",savedbuff_size);
-	savedbuff = (char *)malloc(savedbuff_size);
-	for(int i=0; i<savedbuff_size;++i)savedbuff[i]=0;
-	pos_in_savedbuff = 0;
+	init_output();	
 	//libusb
 	libusb_device **devs = NULL;
 	libusb_context *ctx = NULL;	
@@ -453,7 +505,7 @@ void init_output(){
 
 	printf("buff size is %i \n" , buff_size);
 	buff= malloc(buff_size);
-	//th1buff = malloc(buff_size);
+	th1buff = malloc(buff_size);
 	//int tmp = 0;
 	snd_pcm_hw_params_get_period_time(params, &period, NULL);
 	printf("tmp = : %d\n",period);
