@@ -14,6 +14,11 @@ int sigadd(int a, int b){
 	return c;
 }
 
+void bufftozero(char* buff, int ini, int buff_size){
+	STYPE* sbuff = (STYPE*)(&buff[0]);
+	for(int i=ini; i<buff_size/BXS;++i) sbuff[i]=0;
+}
+
 int vecToInt(char upper, char lower){ //TODO: amb shorts m'estalvio feina potser..
 	
 	int m = 1;

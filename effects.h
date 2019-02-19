@@ -3,8 +3,11 @@
 #include <stdlib.h>
 #include <math.h>
 #include <omp.h>
+#include <time.h>
 #include "notes.h"
 #include "defines.h"
+#include "fft.h"
+#include "lookuptable.h"
 
 //new
 
@@ -19,5 +22,7 @@ int detectNote(char*buff, int buff_size,int rate); //TODO TE UN GRAN PROBLEMA QU
 void distorsion(char* buff, int buff_size, double dis, int tipo);
 void printbuff(char* buff, int buff_size);
 
-void synth(int f, int instr, char* buff, int buff_size,int rate);
+void synth(int f,int instr, char* buff, int buff_size,int rate);
+
+void chorus(int f, char * buff, int buff_size, int rate);
 

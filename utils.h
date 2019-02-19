@@ -10,4 +10,4 @@ int vecToInt(char upper,char lower);
 
 void quadunion(STYPE * buff, int buff_size, int A, int B, int Y, int power);
 
-
+void bufftozero(char* buff, int ini, int buff_size);

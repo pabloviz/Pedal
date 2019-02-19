@@ -12,6 +12,8 @@
 #include "notes.h"
 #include "effects.h"
 #include "fft.h"
+#include "utils.h"
+#include "gpioControl.h"
 
 #define MYTYPE char
 #define ISOSIZE 180
@@ -27,15 +29,23 @@ int channels = 2;
 int seconds = 5;
 snd_pcm_sframes_t frames;
 char* buff;
+char* th1buff;
 int period;
 //char *tramabus;
 int buff_size;
+int mask = 0;
+int nthreads=0;
 
+void process_params(int argc, char* argv[]);
 void DeviceScan(libusb_context *ctx, libusb_device **devs);
 void init_output();
 void iniusblib(libusb_context * ctx);
 libusb_device_handle* selectDevice(libusb_context *ctx, int vid, int pid, int interface, int alt_setting);
 void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* trans);
+
+void th0_work();
+void th1_work();
+void th2_work();
 
 /*
 int howmany=-1;
@@ -56,15 +66,32 @@ void trap(){
 
 int buffindex=0;
 int pablo = 0;
+double ttime = 0;
+int lalal =0;
 static void callback(struct libusb_transfer* transfer){
+
+	//struct timeval tv1;
+	//gettimeofday(&tv1,NULL);
+	//printf("time: %d\n",(tv1.tv_usec-lalal));
+	//lalal = tv1.tv_usec;
+
+
+	//double tmp = clock();
+	//printf("time: %lf\n", tmp-ttime);
+	//ttime=clock();
+	
+	
+	//double tmp = omp_get_wtime();
+	//printf("time: %hf\n", tmp-ttime);
+	//ttime=tmp;
+
+
+	//printf("thread num %d\n",omp_get_thread_num());
 	++pablo;
-	//int nt = omp_get_thread_num();
-	//printf("%d\n",nt);
 	if (transfer->status != LIBUSB_TRANSFER_COMPLETED){
 		printf("Transfer not completed. status = %d \n",transfer->status);
 		return;
 	}
-	//printf("Good transmision \n");
 	int realsize = 0;
 	if (transfer->type == LIBUSB_TRANSFER_TYPE_ISOCHRONOUS){ //les iso pden tenir errors puntuals
 		for(int i=0; i<transfer->num_iso_packets; ++i){
@@ -73,120 +100,102 @@ static void callback(struct libusb_transfer* transfer){
 				printf("Error in packet number %d of %d \n",i,transfer->num_iso_packets);
 				return;
 			}
-			//printf("%d: actual length %d\n",i,packet->actual_length);
 			realsize = packet->actual_length;
 		}
 	}
-	//printf("Transfer length: %d, Actual length: %d\n",transfer->length, transfer->actual_length);	
-	
 	int err;
-
 	//char bu[realsize];	
-	//read(0,bu,realsize);
-	
-	//int mean = 0;	
+	//read(0,bu,realsize);	
 	for(int i=0; i<realsize;i+=1){ //TODO: per accelerar..en realitat aquest buffer jo el tinc
-		//if(transfer->buffer[i]<253){
-			buff[buffindex] = transfer->buffer[i];
-			//mean+=transfer->buffer[i];
-			//buff[buffindex] = bu[i];
-			++buffindex;
-		//	printf("%d %d\n",i,transfer->buffer[i]);
-		//}
-		//buff[buffindex]=transfer->buffer[i];
-		//++buffindex;
-		//buffindex=buff_size;
+		buff[buffindex] = transfer->buffer[i];
+		//buff[buffindex] = bu[i];
+		++buffindex;
 		if(buffindex>=buff_size){
 			//applyeffects();
-			applyeffects();
 			err = snd_pcm_writei(handle,buff,frames);
 			if(err<0){
 				printf("error snd, prepare , %s\n",strerror(errno));
 				snd_pcm_prepare(handle);
 			}
-			/*if(pablo%200==0){detectNote(buff,buff_size,rate);
-				pablo=1;
-			}*/
-			//printf("sent! \n");
 			buffindex=0;
 		}
 	}
-	libusb_submit_transfer(transfer);
+	err = libusb_submit_transfer(transfer);
+	if(err!=0) printf("eeei\n");
 }
-int th1_start=0;
-int th1_valid=0;
-int nota;
-int playnota=0;
+int th1_start=0; int th1_valid=0; int th1_ready=1;
+int nota; int playnota=0;
+int in_v=1; int out_v=1;
+int dist_type=0; int dist_ammount=0;
+int echo_time=0; int echo_reps=0;
 void applyeffects(){
 
-	if(th1_valid==1){
-		//th1_valid=0;
-		//printf("ei: %d\n",nota);
-		playnota=nota*(playnota!=-10);
-		th1_valid=0;
-	}
-	th1_start=1;
-	synth(playnota,0,buff,buff_size,rate);
-/*
-	//#pragma omp single
-	if(omp_get_thread_num()==1){
-
-		while(1);
-bucle:
-	        while(!th1_start);
-		th1_start=0;
-	        int note = detectNote(buff,buff_size,rate);
-	        if(note>10) th1_valid=1;
-		goto bucle;
-
-	}
+	printf("xd\n");
+	//printbuff(buff,buff_size);
+	return;
+	//mask = 4;
 	
-	if(omp_get_thread_num()==0){
-		return;
-		th1_start=1;
-		if(th1_valid==1){ 
-			//synth(note,0,buff,buff_size,rate);
-			th1_valid==0;
+	if(in_v!=1)buff_volume_adjust(buff,0,buff_size,in_v);	
+
+	if(mask&0x01){
+		if(th1_valid==1){
+			playnota=nota*(playnota!=-10);
+			th1_valid=0;
+		}
+		if(th1_ready==1){
+			for(int i=0; i<buff_size; ++i) th1buff[i]=buff[i];
 			th1_start=1;
 		}
-
-	}*/
-	//return;
+		if(playnota>100)synth(playnota,0,buff,buff_size,rate);
+		else bufftozero(buff,0,buff_size);
+	}	
+	if(mask&0x02){
+		echo(period,buff,buff_size,echo_time,echo_reps);
+	}
+	if(mask&0x04){
+		distorsion(buff,buff_size,dist_ammount,dist_type);
+	}
 	
-
-
 	
-	
-	//echo(period,buff,buff_size,2000,8);
-	//distorsion(buff,buff_size,19.3,2);
+	if(out_v!=1)buff_volume_adjust(buff,0,buff_size,out_v);
 
-//	printbuff(buff,buff_size);
-	//
-	//
-	//buff_volume_adjust(buff,0,buff_size,0.5);
-	/*if(pablo>=500)*///echo(period,buff,buff_size,2000,8);
-	
-	//synth(1318,0,buff,buff_size,rate);
-	//printf("%d\n",pablo);
-	//if(pablo>=250){
-		//printbuff(buff,buff_size);
-		//detectNote(buff,buff_size, rate);
-		//if(pablo==202)pablo=;
-	//}
-	//exit(0);
-	/*if(pablo%200==0){
-		distorsion(buff,buff_size,32700);
-		pablo=1;
-	}*/
 }
 
 
 
-int main(void)
+int main(int argc, char* argv[])
 {
-	
-	//PCM = pulse code modulation
+	//process_params(argc,argv);
+	dist_ammount=18;echo_time=1000;echo_reps=4;nthreads=3;
+	inisintable();
+	//printf("%lf\n",getSin(1.5*PI));
+	inicostable();
+	//printf("%lf\n",getCos(100));
+
+
+
 	int err;
+	err = gpio_ini();
+	if(err<0){
+		printf("error in gpio_ini\n");
+		exit(EXIT_FAILURE);
+	}
+	gpio_setOutput(OUT_DIST);
+	gpio_setOutput(OUT_ECHO);
+	gpio_setOutput(OUT_SYNT);
+
+	gpio_setInput(BTN_DIST);
+	gpio_setInput(BTN_ECHO);
+	gpio_setInput(BTN_SYNT);
+
+	gpio_setInput(BTN_ECHO);
+	gpio_setInput(BTN_SYNT);
+	gpio_setInput(BTN_VLUP);
+	gpio_setInput(BTN_VLUP);
+	gpio_setInput(BTN_VLDW);
+	//init_output();
+/*
+	//PCM = pulse code modulation
 	//open PCM
 	 err = snd_pcm_open(&handle,device,SND_PCM_STREAM_PLAYBACK,0);
 	if(err<0){
@@ -220,6 +229,7 @@ int main(void)
 
 	printf("buff size is %i \n" , buff_size);
 	buff= malloc(buff_size);
+	th1buff = malloc(buff_size);
 	//int tmp = 0;
 	snd_pcm_hw_params_get_period_time(params, &period, NULL);
 	printf("tmp = : %d\n",period);
@@ -227,14 +237,9 @@ int main(void)
 
 	int loops = (seconds*1000000)/period;
 	printf("loops : %d\n",loops);
-
-	//open device
-	/*int fd = open("/dev/bus/usb/001/007", O_RDWR | O_NOCTTY);
-	if(fd<0) {printf ("error opening %s \n", strerror(errno)); return -1;}
-	set_interface_attribs(fd,B115200,0);
-	close(fd);*/
-
-	//goto label;
+*/
+	//usb
+	/*
 
 	libusb_device **devs = NULL;
 	//libusb_device_handle *dev_handle;
@@ -247,64 +252,33 @@ int main(void)
 	struct libusb_transfer* trans;
 
 	iniTransmission(dev_handle,trans);
-
+*/
 	int r;
-
-	omp_set_num_threads(2);
-	#pragma omp single
+	nthreads=2;
+	//goto th0;
+	omp_set_num_threads(nthreads);
 	#pragma omp parallel
-	while(1){
-		if(omp_get_thread_num()==0){
-			r = libusb_handle_events(NULL);
-			if(r != LIBUSB_SUCCESS){
-				printf("libusb handle events unsuccesfull \n");
-				//return 0;
-			}
-		}else{
-			while(omp_get_thread_num()==1){
-				while(!th1_start);
-				th1_start=0;
-				nota = detectNote(buff,buff_size,rate);
-				//printf("nota: %d\n", nota);
-				if(nota>100 || nota==-10){
-					th1_valid=1;
-					//printf("nota: %d\n",nota);
-				}
-				while(th1_valid==1);//espera a la consumicio
-				//else th1_valid=0;
-			}
-
-		}
+	{
+	printf("soc %d\n",omp_get_thread_num());
+	if(omp_get_thread_num()==0) th0_work();
+	else if(omp_get_thread_num()==1) th1_work();
+	else if(omp_get_thread_num()==2) th2_work();
+	else{
+		printf("unexpected thread. closing \n");
+		exit(0);
 	}
-	return 0;
-
+	}
+	//return 0;
+	/*
 	libusb_free_transfer(trans);
 	libusb_free_device_list(devs,1);
-	label:
-	for (int l =0; l<=loops; ++l){
-		//read
-		err = read(0,buff,buff_size);
-		if(err<0) printf("error de lectura. %s \n", strerror(errno));
-		
-		//echo(l,period,err,buff,buff_size,500,2);
-		//synth(293,0,buff,buff_size);	
-		//if(l<20)detectNote(buff,buff_size);
-		//write
-		err = snd_pcm_writei(handle,buff,frames);
-		if(err<0) {
-			printf("bon dia. %d\n", errno);
-			snd_pcm_prepare(handle);
-		}
-		//if(err > 0 && err < (long)sizeof(buff)) printf("Short write (expected %li, wrote %li)\n", (long)sizeof(buff),err);
-	}
-	return 0;
 	r = libusb_release_interface(dev_handle, 0);
 	if (r!=0){
 		printf("cannot release interface\n");
 	}
 	printf("interface released");
 	libusb_close(dev_handle);
-	libusb_exit(ctx);
+	libusb_exit(ctx);*/
 	snd_pcm_drain(handle);
 	snd_pcm_close(handle);
 	
@@ -313,146 +287,87 @@ int main(void)
 	return 0;
 }
 
+void th0_work(){
 
-/*
-void echo(int loop, int period,int read, MYTYPE* buff, int buff_size,int ret, int layers){ //layers default = 1
-		if(layers<=0) layers=1;
-		if(echobuff == -1 || howmany==-1){
-			howmany = (ret*1000)/period;
-			echobuff = (MYTYPE*)malloc(buff_size*howmany);
+	init_output();	
+	//libusb
+	libusb_device **devs = NULL;
+	libusb_context *ctx = NULL;	
+	iniusblib(ctx);
+	//DeviceScan(ctx,devs);
+	libusb_device_handle *dev_handle = selectDevice(ctx,2235,10690,INTERFACE,ALTSETTING);
+	struct libusb_transfer* trans;
+	iniTransmission(dev_handle,trans);
+
+	while(1){
+		//printf("time: %d\n", clock()-ttime);
+	//	ttime=clock();
+		int r = libusb_handle_events(ctx);
+		if(r != LIBUSB_SUCCESS){
+			printf("libusb handle events unsuccesfull \n");
+			//return 0;
 		}
-		double power = 1.0/(double)layers;
-		int tmp_howmany = howmany/((layers==1)+(layers-1));
-		//soc un geni de les caches.
-		for(int j=1; j<layers; ++j){
-			int index = tmp_howmany*j;	
-			for(int i=0; i<read; ++i){
-				char new = buff[i];
-				if (loop>=index){
-					MYTYPE old = echobuff[((loop-index)%howmany)*buff_size+i];
-					buff[i] = buff[i] + old;
-				}
-				if(j==1)echobuff[(loop%howmany)*buff_size+i] = new;
-			}
-		}	
+	}
+	//libusb
+	libusb_free_transfer(trans);
+	libusb_free_device_list(devs,1);
+	int r = libusb_release_interface(dev_handle, 0);
+	if (r!=0)printf("cannot release interface\n");
+	printf("interface released");
+	libusb_close(dev_handle);
+	libusb_exit(ctx);
 }
-*/
-
-/*
-int inside_period=-1;
-void synth(int f, int instr, MYTYPE* buff, int buff_size){
-	
-	if(inside_period==-1)inside_period=0;
-	
-*/	
-	/* deixo aixo lineal perque sona guay en plan 8 bits
-	int period_samples = (rate*2)/f;
-	int quarter = period_samples/4;
-	float m = (255.0-127.0)/(float)quarter;
-
-	for(int i=0; i<buff_size;++i){ //tinc un dibuix molt maco a la llibreta chateauform
-		if(inside_period<quarter) 
-			buff[i]=127+m*inside_period;
-
-		if(inside_period>=quarter && inside_period<3*quarter) 
-			buff[i]=255-m*(inside_period-quarter);
-
-		if(inside_period>=3*quarter && i<=period_samples) 
-			buff[i]= m*(inside_period-3*quarter);
-		
-		++inside_period;
-		if(inside_period>=period_samples)inside_period=0;	
-	}*/
-
-
-/*
-	double fd = (rate*2.0)/(double)f;
-	//printf("period_samples = %lf \n", period_samples);
-	for(int i=0; i<buff_size;++i){
-		double value = (sin((inside_period*2.0*PI)/fd))*128 + 127;
-		buff[i] = (char) value;
-		++inside_period;
-		if(inside_period>=fd)inside_period=0;
-	}*/
-
-	
-	/*FILE* fid  = fopen("sortida2.txt", "w+");
-	if(fid<=0)printf("lalala %s", strerror(errno));
-	for(int i=0; i<buff_size;++i){
-		fprintf(fid,"%d %d\n",i,buff[i]);
-	}
-	fclose(fid);*/
-/*
-	
-}*/
-
-
-/*
-int detectNote( MYTYPE*buff, int buff_size){ //TODO TE UN GRAN PROBLEMA QUAN FD NO DIVIDEIX A BUFF_SIZE
-	
-	double fft_real[buff_size];
-	double fft_img[buff_size];
-	//adapt
-	double adapt[buff_size];  //TODO posar aixo en el bucle intern i aixi m'estalvio bucles extres?
-	for(int i=0; i<buff_size; ++i){
-		adapt[i] = ((double)buff[i]-127.0)/128.0;
-	}
-
-	for(int k=0; k<buff_size; ++k){
-		double tmp = 0.0;
-		double tmpi = 0.0;
-		for(int i=0; i<buff_size; ++i){
-			//inputreal[i] = cos(((double)buff[i]*2*PI*i)/buff_size);
-			//inputimg[i]  = sin(((double)buff[i]*2*PI*i)/buff_size);
-			double tmp2 = ((2*PI*k*i)/(double)buff_size)*adapt[i];
-			tmp += cos(tmp2);
-			tmpi -= sin(tmp2);
+void th1_work(){
+	while(1){
+		//printf("time: %d\n", clock()-ttime);
+		//ttime=clock();
+		/*	
+		//printf("x\n");	
+		if(gpio_readValue(BTN_DIST)) {
+			mask ^= 1<<2;
+			gpio_setValue(OUT_DIST,mask&(1<<2));
+			usleep(500000);
 		}
-		fft_real[k]=tmp/buff_size;
-		fft_img[k]=tmpi/buff_size;
-	}
-	//double fft_final[buff_size];
-	//for(int i=0; i<buff_sizze
-
-	//Fft_transform(inputreal,inputimg,buff_size);
-	double max = 0;
-	int pos=0;
-	for(int i=1; i<buff_size; ++i){
-		double f = sqrt(fft_real[i]*fft_real[i]+fft_img[i]*fft_img[i]);
-		if(f>max){
-		       	max=f;
-			pos=i;
+		if(gpio_readValue(BTN_ECHO)) {
+			mask ^= 1<<1;
+			gpio_setValue(OUT_ECHO,mask&(1<<1));
+			usleep(500000);
 		}
-	//	printf("i: %d, real: %lf, img: %lf, final :%lf \n",i,fft_real[i],fft_img[i],f);
+		if(gpio_readValue(BTN_SYNT)) {
+			mask ^= 1<<0;
+			gpio_setValue(OUT_SYNT,mask&(1<<0));
+			usleep(500000);
+		}
+		if(gpio_readValue(BTN_VLUP)){
+			printf("%d\n",in_v);
+			++in_v;
+			usleep(500000);
+		}
+		if(gpio_readValue(BTN_VLDW)){
+			if(in_v>0)--in_v;
+			printf("%d\n",in_v);
+			usleep(500000);
+		}*/
 	}
-	//printf("fft : %d \n",pos);
-	double result = ((double)pos/(double)buff_size)*2.0*(double)rate;
-	printf("result : %lf \n",result);
-	int nota = 0;
-	double ratio = (DO>result ? DO/result : result/DO);
-	double mindist = fabs(ratio-(int)ratio);
-	ratio = (DO_S>result ? DO_S/result : result/DO_S);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=DO_S;}
-	ratio = (RE>result ? RE/result : result/RE);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=RE;}
-	ratio = (RE_S>result ? RE_S/result : result/RE_S);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=RE_S;}
-	ratio = (MI>result ? MI/result : result/MI);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=MI;}
-	ratio = (FA>result ? FA/result : result/FA);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=FA;}
-	ratio = (FA_S>result ? FA_S/result : result/FA_S);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=FA_S;}
-	ratio = (SOL>result ? SOL/result : result/SOL);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=SOL;}
-	ratio = (SOL_S>result ? SOL_S/result : result/SOL_S);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=SOL_S;}
-	ratio = (LA>result ? LA/result : result/LA);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=LA;}
-	printf("nota = %d \n",nota);		
+}
+void th2_work(){
+		//++pablo;
+		/*
+		while(!th1_start);
+		th1_ready=0;
+		th1_start=0;
+		nota = detectNote(th1buff,buff_size,rate);
+		//printf("nota: %d\n", nota);
+		if(nota>100 || nota==-10){
+			th1_valid=1;
+			//printf("nota: %d\n",nota);
+		}
+		while(th1_valid==1);//espera a la consumicio
+		th1_ready=1; //es preparar per rebre noves dades
+		//else th1_valid=0;
+		*/
 
-}*/
-
+}
 void init(){
 
 	//open PCM
@@ -556,6 +471,51 @@ libusb_device_handle* selectDevice(libusb_context *ctx, int vid, int pid, int in
 	return dev_handle;
 }
 
+void init_output(){
+
+	int err = snd_pcm_open(&handle,device,SND_PCM_STREAM_PLAYBACK,0);
+	if(err<0){
+		printf("Playback open error: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	//allocate parameteres object, default values
+	snd_pcm_hw_params_alloca(&params);
+	snd_pcm_hw_params_any(handle,params);
+	//set params
+	err = snd_pcm_hw_params_set_access(handle,params,SND_PCM_ACCESS_RW_INTERLEAVED);
+	if(err<0) printf("Cant set inreleaved mode. %s \n", strerror(errno));
+
+	err = snd_pcm_hw_params_set_format(handle,params,SND_PCM_FORMAT_S16_LE);
+	if(err<0) printf("Cant set format. %s \n", strerror(errno));
+	
+	err = snd_pcm_hw_params_set_channels(handle,params,channels);
+	if(err<0) printf("Cant set channels number. %s \n", strerror(errno));
+	
+	err = snd_pcm_hw_params_set_rate_near(handle,params,&rate,0);
+	if(err<0) printf("Cant set rate. %s \n", strerror(errno));
+	//write params
+	err = snd_pcm_hw_params(handle,params);
+	if(err<0) printf("Cant write params. %s \n", strerror(errno));
+	snd_pcm_hw_params_get_period_size(params, &frames, 0);
+	buff_size = frames * channels *2; //el 2 es per el "sample size"
+	
+	//temporalbuffer_size = (buff_size/ISOSIZE + ((buff_size%ISOSIZE)?1:0))*ISOSIZE;
+	//temporalbuffer = malloc(temporalbuffer_size);
+	//printf("temp buff size is %d \n",temporalbuffer_size);
+
+	printf("buff size is %i \n" , buff_size);
+	buff= malloc(buff_size);
+	th1buff = malloc(buff_size);
+	//int tmp = 0;
+	snd_pcm_hw_params_get_period_time(params, &period, NULL);
+	printf("tmp = : %d\n",period);
+
+
+	int loops = (seconds*1000000)/period;
+	printf("loops : %d\n",loops);
+}
+
+
 void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* trans){
 	int received = 0;
 	//int size = 180;
@@ -577,5 +537,23 @@ void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* 
 	int r = libusb_submit_transfer(trans);
 	if(r!=0){
 		printf("Error submiting transfer \n");
+	}
+}
+void process_params(int argc, char* argv[]){
+	
+	if(argc<4) printf("falten params:\n sudo ./main.o in_v out_v mask dist_type/echo_time dist_ammount/echo_reps\n");
+	in_v = atoi(argv[1]);
+	out_v= atoi(argv[2]);
+	mask = atoi(argv[3]);
+	if((mask&0x01)!=0) nthreads=3;
+	else nthreads=2;
+
+	if((mask&0x04)!=0){
+		dist_type   =atoi(argv[4]);
+		dist_ammount=atoi(argv[5]);	
+	}
+	if((mask&0x02)!=0){
+		echo_time = atoi(argv[4]);
+		echo_reps = atoi(argv[5]);
 	}
 }

@@ -9,9 +9,9 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 		if(layers<=0) return;
 		if(echobuff == (char*)-1 || howmany==-1){ //TODO cuidado malloc massa gran
 			howmany = (ret*1000)/period;
-			printf("howmany : %d\n",howmany);
+			//printf("howmany : %d\n",howmany);
 			echobuff_size = buff_size*howmany;
-			printf("echobuff_size: %d\n",echobuff_size);
+			//printf("echobuff_size: %d\n",echobuff_size);
 			echobuff = (char*)malloc(echobuff_size);
 			echobuff_index = 0;
 			for(int i=0; i<echobuff_size; ++i) echobuff[i]=0;
@@ -29,7 +29,7 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 		{
 			double power = (double)layers/((layers+1)*j*4.0);
 			//double power = 1.0/((layers+1)*j*1.0);
-			//if(j==layers) power = 0.05;
+			if(j==layers) power = 0.05;
 			int samples_back = tmp_howmany*j*buff_size;//quantes mostres enrere (8bits)
 			if (samples_back%2==1) printf("ei\n");
 			if (samples_back>howmany*buff_size){
@@ -74,123 +74,82 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 
 
 //16 bits
-STYPE * detectbuff = (STYPE *)-1;
+char * detectbuff = (char *)-1;
 int detectbuff_size;
-int detectbuff_howmany=10;
+int detectbuff_howmany=5;
 int counter=0;
 int detectNote( char*buff, int buff_size, int rate){
 
+	clock_t start, end;
+	double cpu_time_used;
+	start = clock();
+
 	STYPE * sbuff = (STYPE *)&(buff[0]);
-	for(int i=0; i<buff_size/BXS;++i){
-		if(sbuff[i]>100) goto jeje;
-	}
+	for(int i=0; i<buff_size/BXS;++i)if(sbuff[i]>50) goto jeje;
 	return -10;
 	jeje:
-	if(detectbuff==(STYPE*)-1){
-		detectbuff_size = detectbuff_howmany*buff_size/(2); //diria que el 2 es per l'interleaved
-		detectbuff = (STYPE *)malloc(detectbuff_size);
+	if(detectbuff==(char*)-1){
+		counter = 0;
+		detectbuff_size = detectbuff_howmany*buff_size/2; 
+		//diria que el 2 es per l'interleaved
+		detectbuff = (char *)malloc(detectbuff_size);
 	}
 	if(counter==detectbuff_howmany){ counter=0;}
 	else{
-		for(int i=0; i<buff_size/BXS; i+=2){
-			detectbuff[i/2 + counter*buff_size/(BXS*2)]=sbuff[i];
+		for(int i=0; i<buff_size; i+=4) {
+			int index = (detectbuff_size/detectbuff_howmany)*counter +i/2;
+			detectbuff[index]=buff[i];
+			detectbuff[index+1]=buff[i+1];
 		}
 		++counter;
 		return -1;
 	}
-	
-	//exit(0);
-	//buff_size/=2;
-	//esta interleaved, no agafem les mostres senars
-	//rate = 414000;
-	//int N = buff_size/BXS;
 	int N = detectbuff_size/BXS;
 	int reduction = 15;
 	double fft_mag[N/reduction];
-	//adapt
 	double adapt[N];
-	//printf("N: %d\n",N);	
+	STYPE * sdetectbuff = (STYPE *)&(detectbuff[0]);
 	for(int i=0; i<N; i+=1){
-		//printf("%d\n",detectbuff[i]);
-		double tmp = ((double)(detectbuff[i])/32767)*(0.5-0.5*cos((2.0*PI*i)/(2*N-1)));
+		double tmp = ((double)(sdetectbuff[i])/32767)*(0.5-0.5*cos((2.0*PI*i)/(2*N-1)));
 		adapt[i] = tmp;
-		//adapt[i+1] = tmp; //interleaved
-		//printf("%lf\n",adapt[i]);
 	}	
-	//printf("\n\nbuscam\n\n");
-	//exit(0);
-	//return;
-	
+	double max=-100.0;
+	int pos=0;
+	double posd=0;
+	int flag=0;
+
 	for(int k=0; k<N/reduction; ++k){
 		double tmp = 0.0;
 		double tmpi = 0.0;
 		for(int i=0; i<N; ++i){
 			double tmp2 = ((2*PI*k*(i))/(double)N);
-			tmp  += cos(tmp2)*adapt[i];
-			tmpi += sin(tmp2)*adapt[i];
+			tmp += getCos(tmp2)*adapt[i];
+			tmpi += getSin(tmp2)*adapt[i];
+			
 		}
 		double d = tmp*tmp + tmpi*tmpi;
 		if(d<0)d=0;
-		fft_mag[k] = sqrt(d);
-	}
-	double max = -100.0;
-	int pos=0;
-	for(int i=2; i<N/reduction; ++i){
-		//printf("%lf\n",fft_mag[i]);
-		if(fft_mag[i]>max){
-		       	if(fft_mag[i]>1){
-				max=fft_mag[i];
-				pos=i;
+		fft_mag[k] = /*sqrt(d)*/d;
+		if(d > max){
+			if(d>2.0){
+				max=d;
+				pos=k;
 			}
-		}else break;
-	}
-	//printf("\n\n\n\n");
-	
-	int limit = (pos<10?pos:pos);
-	double nom=pos*fft_mag[pos];
-	double den=fft_mag[pos];
-	for(int i=1; i<limit;++i){
-		nom += (pos-i)*fft_mag[pos-i];
-		den += fft_mag[pos-i];
+		}else {
+			posd = fft_mag[k-1]*(k-1) + max*(k-1) + d*k;
+			posd /= fft_mag[k-1] + max + d;
+			goto etiqueta;
+		}
 
-		nom += (pos+i)*fft_mag[pos+i];
-		den += fft_mag[pos+i];
 	}
-	nom = pos;
-	den = 1;
-	//printf("%lf\n",nom/den);
-	//double nom = (double)pos;
-	//double den = 1.0;
-
-	//printf("fft : %lf \n",nom/den);
-	double result = (rate*nom*BXS)/(N*den);
-	//return (int)result;
-	//double result = ((double)pos/(double)buff_size)*BXS*(double)rate;
-	//printf("result : %lf \n",result);
+etiqueta:
+	flag=0;
+	double result = (rate*posd*BXS)/(N);
+	end = clock();
+	cpu_time_used = ((double)(end-start))/CLOCKS_PER_SEC;
+	//printf("time: %lf\n",cpu_time_used);
+	//printf("%d\n",(int)result);
 	return (int)result;
-//	exit(0);
-	/*int nota = 0;
-	double ratio = (DO>result ? DO/result : result/DO);
-	double mindist = fabs(ratio-(int)ratio);
-	ratio = (DO_S>result ? DO_S/result : result/DO_S);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=DO_S;}
-	ratio = (RE>result ? RE/result : result/RE);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=RE;}
-	ratio = (RE_S>result ? RE_S/result : result/RE_S);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=RE_S;}
-	ratio = (MI>result ? MI/result : result/MI);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=MI;}
-	ratio = (FA>result ? FA/result : result/FA);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=FA;}
-	ratio = (FA_S>result ? FA_S/result : result/FA_S);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=FA_S;}
-	ratio = (SOL>result ? SOL/result : result/SOL);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=SOL;}
-	ratio = (SOL_S>result ? SOL_S/result : result/SOL_S);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=SOL_S;}
-	ratio = (LA>result ? LA/result : result/LA);
-	if (abs(ratio-(int)ratio) < mindist) {mindist=fabs(ratio-(int)ratio);nota=LA;}
-	printf("nota = %d \n",nota);*/		
 
 }
 
@@ -201,7 +160,10 @@ void buff_volume_adjust(char * buff, int ini, int buff_size,double volume){
 	short* sbuff = (short*)&(buff[0]);
 	if(ini%2==1) printf("ini ha de ser un nombre parell");
 	for(int i=0; i<buff_size/2; i+=1){
-		sbuff[i]*=volume;
+		int new = (int)sbuff[i]*volume;
+		if(new>32767)new=32767;
+		else if (new<-32767)new=-32767;
+		sbuff[i]=(STYPE)new;
 		/*int ivalue = (buff[i]<<8) + (buff[i+1]&0x0FF);
 		int fvalue = ((double)(ivalue-32767)*v + 32767);
 		if(fvalue>65535)fvalue=65535;
@@ -215,23 +177,40 @@ void buff_volume_adjust(char * buff, int ini, int buff_size,double volume){
 
 }
 
-int inside_period=-1;
+int* inside_period=(int *)-1;
+double* fd=(double *)-1;
 void synth(int f, int instr, char* buff, int buff_size,int rate){ //a 16 bits
 	
-	if(inside_period==-1)inside_period=0;
+	if(inside_period==(int *)-1 || fd==(double*)-1){
+		inside_period=(int *)malloc(sizeof(int)*4);
+		fd = (double *)malloc(sizeof(double)*4);
+	}
 
-	double fd = (rate*2.0)/(double)f;
-	fd/=2.0;//interleaved
+	int f_size=3;
+	fd[0] = (double)rate/(double)f;
+	fd[1] = fd[0]*=1.25;
+	fd[2] = fd[0]*=1.5;
+	/*for(int i=0; i<f_size;++i){
+		fd[i] = (double)rate/(double)f;
+	}*/
+
+	//double fd = (rate*2.0)/(double)f;
+	//fd/=2.0;//interleaved
 	double att=0.01;
-	//printf("period_samples = %lf \n", period_samples);
+	
 	short* sbuff = (short*)&(buff[0]);
 	for(int i=0; i<buff_size/2;i+=2){
-		////printf("%d\n",sizeof(short));
-		short value = (sin((inside_period*2.0*PI)/fd))*32767*att;
-		sbuff[i]=value;
-		sbuff[i+1]=0; //interleaved
-		++inside_period;
-		if(inside_period>=fd)inside_period=0;
+	
+		for(int j=0; j<f_size;++j){
+			double val = ((inside_period[j]*2.0*PI)/fd[j]);
+			short value = getSin(val)*32767*att;
+			if(j==0){
+				sbuff[i]=value;
+				sbuff[i+1]=0; //interleaved
+			}else sbuff[i]+=value;
+			++inside_period[j];
+			if(inside_period[j]>=fd[j])inside_period[j]=0;
+		}
 	}
 
 	
@@ -251,30 +230,6 @@ void distorsion(char* buff, int buff_size, double dis, int tipo){
 	//printf("%d -> %d\n",0xFFFE,vecToInt(0xFF,0xFF));
 	//printf("@c %d \n",(int)buff);
 	short* sbuff = (short*)&(buff[0]);
-	/*
-	if(pablito==0){
-		for(int i=0; i<buff_size/BXS -50;i+=2){
-			sbuff[i] = -1000;
-		}
-		for(int i=buff_size/BXS -50; i<buff_size/BXS; i+=2){
-			sbuff[i] = -1500;
-		}
-	}else if (pablito==1){
-		for(int i=0; i<50;++i){
-			sbuff[i] = -2000;
-		}for(int i=50; i<buff_size/BXS; i+=2){
-			sbuff[i] = -1000;
-		}
-	}
-	++pablito;*/	
-	//printf("@s %d \n",(int)sbuff);
-	/*
-	int max=0;
-	for(int i=0; i<buff_size/BXS; ++i){
-		if(sbuff[i]>0 && sbuff[i]>max) max = sbuff[i];
-		else if (sbuff[i]<0 && sbuff[i]<-max) max = -sbuff[i];
-
-	}*/
 	int limit = -1639*dis + 32767;
 	//printf("limit: %d\n",limit);
 	int pos = -1;
@@ -308,7 +263,7 @@ void distorsion(char* buff, int buff_size, double dis, int tipo){
 					quadunion(sbuff,buff_size,l2,i,limit,-5);
 				}
 			}else if(tipo==3){
-				for(int j=pos;j<=i;j+=2)sbuff[j]=((sbuff[j]-limit)*0.5)+limit;
+				for(int j=pos;j<=i;j+=2)sbuff[j]=((sbuff[j]-limit)*0.4)+limit;
 			}
 			pos = -1;	
 		}else if (sbuff[i]<-limit && posn==-1){//obrim
@@ -352,6 +307,9 @@ void distorsion(char* buff, int buff_size, double dis, int tipo){
 }
 
 
+void chorus(int f, char * buff, int buff_size, int rate){
+;
+}
 
 
 
@@ -363,5 +321,5 @@ void printbuff(char* buff, int buff_size){
 		STYPE s = sbuff[i];
 		printf("%d\n",s);
 	}
-	printf("\n\n\naaaaaaaaaaa\n\n\n");
+	//printf("\n\n\naaaaaaaaaaa\n\n\n");
 }
