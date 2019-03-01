@@ -247,3 +247,35 @@ int detectNote( MYTYPE*buff, int buff_size){ //TODO TE UN GRAN PROBLEMA QUAN FD 
 
 }*/
 
+
+//gpio
+		//printf("hola\n");
+		//printf("time: %d\n", clock()-ttime);
+		//ttime=clock();
+		/*	
+		//printf("x\n");	
+		if(gpio_readValue(BTN_DIST)) {
+			mask ^= 1<<2;
+			gpio_setValue(OUT_DIST,mask&(1<<2));
+			usleep(500000);
+		}
+		if(gpio_readValue(BTN_ECHO)) {
+			mask ^= 1<<1;
+			gpio_setValue(OUT_ECHO,mask&(1<<1));
+			usleep(500000);
+		}
+		if(gpio_readValue(BTN_SYNT)) {
+			mask ^= 1<<0;
+			gpio_setValue(OUT_SYNT,mask&(1<<0));
+			usleep(500000);
+		}
+		if(gpio_readValue(BTN_VLUP)){
+			printf("%d\n",in_v);
+			++in_v;
+			usleep(500000);
+		}
+		if(gpio_readValue(BTN_VLDW)){
+			if(in_v>0)--in_v;
+			printf("%d\n",in_v);
+			usleep(500000);
+		}*/

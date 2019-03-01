@@ -2,16 +2,11 @@
 #include "defines.h"
 
 
-int sigadd(int a, int b){
-
-	a-=32767;
-	b-=32767;
-	//printf("%d, %d\n",a,b);
-	int c = a+b;
-	c+=32767;
-	if (c>100535) c = 65535;
-	else if (c<-2) c=0;
-	return c;
+STYPE sigadd(STYPE a, STYPE b){
+	int tmp = (int)a + (int)b;
+	if(tmp>MAXVALUE) return MAXVALUE;
+	if (tmp<-MAXVALUE) return -MAXVALUE;
+	return a + b;
 }
 
 void bufftozero(char* buff, int ini, int buff_size){

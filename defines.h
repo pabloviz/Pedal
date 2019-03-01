@@ -1,4 +1,5 @@
 #define STYPE short
+#define MAXVALUE 32767
 #define BXS 2 //bytes per sample
 #define PI 3.14159265
 #define SAVED_mSECONDS 5000

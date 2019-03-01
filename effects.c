@@ -2,38 +2,56 @@
 #include "utils.h"
 //new
 //
-double cachedvalue = -1;
+double cachedvalue = -1.0;
+long* intbuffer;
 void echo(char* buff, int buff_size, char* savedbuff, int savedbuff_size,
 	int savedbuff_pos, int bpm, double when, int howlong){
 
-	if(when<0.0 || howlong*1000>SAVED_mSECONDS || bpm<0){
-		printf("invalid parameters for echo \n");
+	/*if(when<0.0 || howlong*when*1000>SAVED_mSECONDS || bpm<0){
+		printf("invalid parameters for echo %d %lf %d\n",bpm,when,howlong);
 		return;
-	}
-	if(cachedvalue==-1) cachedvalue = (double)savedbuff_size*60.0*1000.0;
+	}*/
+	if(intbuffer==NULL) intbuffer = (long *)malloc((buff_size/2.0)*sizeof(long));
+	if(cachedvalue==-1.0) cachedvalue = (double)savedbuff_size*60.0*1000.0;
 	double bytes_per_beat = cachedvalue/((double)bpm*SAVED_mSECONDS);
+	howlong = (howlong*bpm)/60;
 	double bytes_back = bytes_per_beat * when;
-	if (bytes_back == savedbuff_size) bytes_back -= 1024.0;
-
+	if (bytes_back == savedbuff_size) bytes_back -= (double)buff_size;
 	STYPE* sbuff  = (STYPE*)(&buff[0]);
 	STYPE* ssaved = (STYPE*)(&savedbuff[0]);
-
+	double min = 0.01;
+	double max = 1.0;	
+	double power;
+	//quadratic volume down
+	double B = howlong-1.0;
+	double l = (B!=0.0?((max-min)/(B*B)):1.0); //no hauria d'importar
 	for(int it=1; it<=howlong; ++it){
 		int index = savedbuff_pos - (int)bytes_back*it - buff_size;
 		if (index < 0) index = savedbuff_size + index;
 		index /= BXS;
 		if(index%2==1)--index;
+		power = (it!=1?(l*(it-howlong)*(it-howlong) + min):max);
+		//power = 0.9;
 		for (int i=0; i<buff_size/BXS; i+=2){
 			STYPE old_value = ssaved[index+i];
-			if ((int)sbuff[i] + (int)old_value >= 32767) sbuff[i]=32767;
-			else if ((int)sbuff[i] + (int)old_value <= -32767) sbuff[i]=-32767;
-			else sbuff[i] = sbuff[i] + old_value;
+			if(it==1) intbuffer[i/2] = sbuff[i];
+			
+			intbuffer[i/2] += old_value*power;
+			if(it==howlong){
+				if (intbuffer[i/2]>=MAXVALUE) sbuff[i] = MAXVALUE;
+				else if(intbuffer[i/2]<=-MAXVALUE)sbuff[i]= -MAXVALUE;
+				else sbuff[i] = intbuffer[i/2];
+			}
+
+
+
+			//if ((int)sbuff[i] + (int)old_value*power >= 32767) sbuff[i]=32767;
+			//else if ((int)sbuff[i] + (int)old_value*power <= -32767) sbuff[i]=-32767;
+			//else sbuff[i] = sbuff[i] + old_value*power;
 		}
 	}
-
-
-
 }
+
 
 /*
 int howmany=-1;
@@ -104,23 +122,69 @@ void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers d
 		//printf("xd: %d \n", volume_adjust(30,100));
 
 }*/
+void reverb(char* buff, int buff_size, char* savedbuff, int savedbuff_size,
+	  int savedbuff_pos){
+	
+	STYPE* sbuff = (STYPE*)(&buff[0]);
+	STYPE* ssaved = (STYPE*)(&savedbuff[0]);
+	savedbuff_pos -= buff_size;
+
+	/*int chunks_back = 150;
+	savedbuff_pos -= buff_size;
+	int index = savedbuff_pos - buff_size*chunks_back;
+	if(index<0) index = savedbuff_size + index;
+	if(index<0){
+		printf("error in reverb\n");
+		exit(0);
+	}
+	index /= 2;*/
+	
+	int nindexes = 13;
+	int indexes[] = {
+	//	2,4,6,8,10,12,14,16,18
+		26,24,22,20,18,16,14,12,10,8,6,4,2
+	};
+	double multis[] = {
+		0.05,0.07,0.09,0.11,0.14,0.15,0.24,0.29,0.35,0.41,
+		0.49,0.53,0.55,0.57,0.59,0.61,0.63,0.65,0.67,0.69  
+	};
+	for(int i=0; i<nindexes; ++i){
+		int tmp = indexes[i];
+		tmp = savedbuff_pos - buff_size*tmp;
+		if(tmp<0) tmp = savedbuff_size + tmp;
+		indexes[i] = tmp/2;
+	}
+
+
+	for (int k=0; k<buff_size/BXS; k+=2){
+		int tmp = 0;
+		for (int i=0; i<nindexes; ++i){
+			tmp += ssaved[indexes[i]+k]*multis[i];
+		}
+		sbuff[k] = sigadd(sbuff[k]*0.7,(STYPE)tmp);
+	}
+
+
+}
 
 
 //16 bits
-char * detectbuff = (char *)-1;
-int detectbuff_size;
-int detectbuff_howmany=5;
-int counter=0;
-int detectNote( char*buff, int buff_size, int rate){
+//char * detectbuff = (char *)-1;
+//int detectbuff_size;
+//int detectbuff_howmany=5;
+//int counter=0;
+int detectNote(/*char*buff,int buff_size,*/char* savedbuff,int savedbuff_size,int savedbuff_pos,int rate){
 
 	clock_t start, end;
 	double cpu_time_used;
 	start = clock();
 
-	STYPE * sbuff = (STYPE *)&(buff[0]);
+	//STYPE * sbuff = (STYPE *)&(buff[0]);
+	/*
 	for(int i=0; i<buff_size/BXS;++i)if(sbuff[i]>50) goto jeje;
 	return -10;
 	jeje:
+	
 	if(detectbuff==(char*)-1){
 		counter = 0;
 		detectbuff_size = detectbuff_howmany*buff_size/2; 
@@ -136,16 +200,29 @@ int detectNote( char*buff, int buff_size, int rate){
 		}
 		++counter;
 		return -1;
-	}
-	int N = detectbuff_size/BXS;
+	}*/
+	int factor = 128;
+	int N = savedbuff_size/factor;
+	N = N/(2*BXS);
+	//printf("N: %d\n",N);
 	int reduction = 15;
 	double fft_mag[N/reduction];
 	double adapt[N];
-	STYPE * sdetectbuff = (STYPE *)&(detectbuff[0]);
+	STYPE * ssaved = (STYPE *)&(savedbuff[0]);
+	int index = savedbuff_pos - savedbuff_size/factor;
+	if(index<0) index = savedbuff_size + index;
+	index/=BXS;
+	STYPE op = 15;
 	for(int i=0; i<N; i+=1){
-		double tmp = ((double)(sdetectbuff[i])/32767)*(0.5-0.5*cos((2.0*PI*i)/(2*N-1)));
+		if(ssaved[index]>op)++op;
+		double tmp = ((double)(ssaved[index])/32767)*(0.5-0.5*getCos((2.0*PI*i)/(N-1)));
+		index+=2;
+		if(index>=savedbuff_size/BXS)index=0;
 		adapt[i] = tmp;
-	}	
+	}
+	if(op==15) return -10;
+	//printf("\n\n hola \n\n");
+	//exit(0);
 	double max=-100.0;
 	int pos=0;
 	double posd=0;
@@ -175,6 +252,7 @@ int detectNote( char*buff, int buff_size, int rate){
 		}
 
 	}
+	printf("aixo no hauria de passar\n");
 etiqueta:
 	flag=0;
 	double result = (rate*posd*BXS)/(N);
@@ -229,7 +307,7 @@ void synth(int f, int instr, char* buff, int buff_size,int rate){ //a 16 bits
 
 	//double fd = (rate*2.0)/(double)f;
 	//fd/=2.0;//interleaved
-	double att=0.01;
+	double att=0.05;
 	
 	short* sbuff = (short*)&(buff[0]);
 	for(int i=0; i<buff_size/2;i+=2){
@@ -263,8 +341,11 @@ void distorsion(char* buff, int buff_size, double dis, int tipo){
 	//printf("%d -> %d\n",0xFFFE,vecToInt(0xFF,0xFF));
 	//printf("@c %d \n",(int)buff);
 	short* sbuff = (short*)&(buff[0]);
-	int limit = -1639*dis + 32767;
+
+	double den = (dis/4.0) + 1.0;
+	int limit = 32767.0/den;
 	//printf("limit: %d\n",limit);
+	//return;
 	int pos = -1;
 	int posn = -1;
 	int a,b;
@@ -344,13 +425,19 @@ void chorus(int f, char * buff, int buff_size, int rate){
 ;
 }
 
+int offset = 120;
+int flag=1;
+void flanger(char * buff, int buff_size, char * savedbuff, int savedbuff_size, int pos_in_savedbuff, int bpm){
 
+
+
+}
 
 
 void printbuff(char* buff, int buff_size){
 
 	STYPE* sbuff = (STYPE*)(&buff[0]);
-	for(int i=0; i<buff_size/BXS;i+=2){
+	for(int i=0; i<buff_size/BXS;i+=1){
 		STYPE s = sbuff[i];
 		printf("%d\n",s);
 	}

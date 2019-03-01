@@ -9,19 +9,12 @@
 #include <unistd.h>
 //#include "openusb.h"
 #include <libusb-1.0/libusb.h>
-#include <pthread.h>
-#include <sys/socket.h>
-#include <sys/types.h> 
-//#include <netdb.h> 
-//#include <netinet/in.h> 
-#include <arpa/inet.h> //el pton
 #include "notes.h"
 #include "effects.h"
 #include "fft.h"
 #include "utils.h"
 #include "gpioControl.h"
 
-#define SA struct sockaddr 
 #define MYTYPE char
 #define ISOSIZE 180
 #define INTERFACE 2
@@ -111,42 +104,15 @@ static void callback(struct libusb_transfer* transfer){
 	//char bu[realsize];	
 	//read(0,bu,realsize);	
 	for(int i=0; i<realsize;i+=1){
-		
-		//buff[buffindex] = transfer->buffer[i];
-		//bu[0] = transfer->buffer[i];
-		//read(0,bu,1);
-		//
-		char bu[1];
-		read(0,bu,1);
-		char num[4];
-		int ii=0;
-		while(bu[0]!=10){
-			num[ii]=bu[0];
-			++ii;
-			read(0,bu,1);
-		}
-		//printf("%d :",ii);
-		char realnum[ii];
-		for(int kk=0;kk<ii;++kk) realnum[kk]=num[kk];
-		int a = atoi(realnum);	
-		buff[buffindex] = (char)a;
+		buff[buffindex] = transfer->buffer[i];
+		//buff[buffindex] = bu[i];
 		++buffindex;
-		printf("%d\n",buff[buffindex-1]);
-		//if(i==10)exit(0);
-		//printf("%d\n",transfer->buffer[i]);
-
 		if(buffindex>=buff_size){
-		//printbuff(buff,buff_size);	
-		//synth(440,0,buff,buff_size,rate);
-
-			//savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
-			//reverb(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff);
-			//savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
+			savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
 			//printf("pos_in_savedbuff : %d\n",pos_in_savedbuff);
-			//
-			/*echo(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff
-			    ,120,0.5,10);*/
-
+			echo(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff
+			    ,120,0.5,10);
+			//reverb(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff);
 			//flanger(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff,120);
 			//applyeffects();
 			err = snd_pcm_writei(handle,buff,frames);
@@ -160,55 +126,20 @@ static void callback(struct libusb_transfer* transfer){
 	err = libusb_submit_transfer(transfer);
 	if(err!=0) printf("eeei\n");
 }
-
+int th1_start=0; int th1_valid=0; int th1_ready=1;
 int nota; int playnota=0;
-int detect_start=0,detect_finished=1;
-
-struct effectparams{
-    	int dist_ammount,echo_bpm,echo_when,echo_reps;
-    	short in_v,out_v,dist_type;
-    	char dist,echo,synt;
-};
-struct effectparams ep;
-
+int in_v=1; int out_v=1;
+int dist_type=0; int dist_ammount=0;
+int echo_time=0; int echo_reps=0;
 void applyeffects(){
-	//ep.dist_ammount = 100;
-	//printf(" %d %lf \n",ep.in_v, ((double)ep.in_v*(double)ep.in_v)/64.0);
-//	ep.dist=1;
-	//ep.dist_ammount=64;
-	//ep.synt = 1;
-	if(ep.in_v!=8){
-		double vol = ((double)(ep.in_v * ep.in_v))/64.0;
-		buff_volume_adjust(buff,0,buff_size,vol);
-	}
-	if(ep.synt){
-		if(detect_finished==1){
-			detect_finished=0;
-			detect_start=1;
-		//	detect_finished=0;
-			playnota = nota;
-			//printf("%d\n",playnota);
-		}
-		if(playnota>100) synth(playnota,0,buff,buff_size,rate);
-		else bufftozero(buff,0,buff_size);
-	}
-	/*if((pos_in_savedbuff%2048)==0){
-		int ndn = detectNote(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff,rate);
-		printf("note : %d\n",ndn);
-	}*/
-	if(ep.echo) 
-		echo(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff,
-		     ep.echo_bpm,((double)ep.echo_when)/100.0,ep.echo_reps);
-	//return;
-	if(ep.dist)
-		distorsion(buff,buff_size,ep.dist_ammount,ep.dist_type);
 
-	if(ep.out_v!=8){
-		double vol = ((double)(ep.out_v * ep.out_v))/64.0;
-		buff_volume_adjust(buff,0,buff_size,vol);
-	}
+	printf("xd\n");
+	//printbuff(buff,buff_size);
 	return;
-	/*
+	//mask = 4;
+	
+	if(in_v!=1)buff_volume_adjust(buff,0,buff_size,in_v);	
+
 	if(mask&0x01){
 		if(th1_valid==1){
 			playnota=nota*(playnota!=-10);
@@ -229,7 +160,7 @@ void applyeffects(){
 	}
 	
 	
-	if(out_v!=1)buff_volume_adjust(buff,0,buff_size,out_v);*/
+	if(out_v!=1)buff_volume_adjust(buff,0,buff_size,out_v);
 
 }
 
@@ -237,18 +168,8 @@ void applyeffects(){
 
 int main(int argc, char* argv[])
 {
-	ep.dist_ammount=0;ep.echo_bpm=60;ep.echo_when=100;ep.echo_reps=1;
-	ep.in_v=8;ep.out_v=8;ep.dist_type=2;ep.dist=0;ep.echo=0;
-	//ep = {0,100,100,1,8,8,0,0,0};
-	pthread_t socketthread,socketthread1;
-	if (pthread_create(&socketthread,NULL,(void *)th1_work,0)){
-		printf("error creating thread\n");
-	}
-	if (pthread_create(&socketthread1,NULL,(void *)th2_work,0)){
-		printf("error creating thread\n");
-	}
 	//process_params(argc,argv);
-	//dist_ammount=18;echo_time=1000;echo_reps=4;nthreads=3;
+	dist_ammount=18;echo_time=1000;echo_reps=4;nthreads=3;
 	inisintable();
 	//printf("%lf\n",getSin(1.5*PI));
 	inicostable();
@@ -278,11 +199,6 @@ int main(int argc, char* argv[])
 	int r;
 	nthreads=1;
 	//goto th0;
-	
-
-
-	th0_work();
-	/*
 	omp_set_num_threads(nthreads);
 	#pragma omp parallel
 	{
@@ -294,7 +210,7 @@ int main(int argc, char* argv[])
 		printf("unexpected thread. closing \n");
 		exit(0);
 	}
-	}*/
+	}
 	//return 0;
 	/*
 	libusb_free_transfer(trans);
@@ -353,70 +269,54 @@ void th0_work(){
 	libusb_exit(ctx);
 }
 void th1_work(){
-    
-	int sockfd, connfd, len; 
-	struct sockaddr_in servaddr, cli; 
-	int socket_port = 8080;
-    	//socket create and verification 
-	sockfd = socket(AF_INET, SOCK_STREAM, 0); 
-    	if (sockfd == -1) { 
-        	printf("socket creation failed...\n"); 
-        	exit(0); 
-    	}else printf("Socket successfully created..\n"); 
-    	bzero(&servaddr, sizeof(servaddr));
-    	// assign IP, PORT 
-    	servaddr.sin_family = AF_INET; 
-    	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    	servaddr.sin_port = htons(socket_port); 
-    	if(inet_pton(AF_INET,"192.168.1.155", &servaddr.sin_addr)<=0) printf("ERROR addr not suported");
-    	// Binding newly created socket to given IP and verification 
-    	if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) { 
-        	printf("socket bind failed...\n"); 
-        	exit(0); 
-    	}else printf("Socket successfully binded..\n"); 
-    	// Now server is ready to listen and verification 
-    	if ((listen(sockfd, 5)) != 0) { 
-        	printf("Listen failed...\n"); 
-        	exit(0); 
-    	}else printf("Server listening..\n"); 
-   	 len = sizeof(cli); 
-    	// Accept the data packet from client and verification 
-    	connfd = accept(sockfd, (SA*)&cli, &len); 
-    	if (connfd < 0) { 
-       	 	printf("server acccept failed...\n"); 
-        	exit(0); 
-    	}else printf("server acccept the client...\n");
-    	int s = 6;
-    	unsigned char buff[s];
-
-    	while(1){
-    		for(int i=0; i<s;++i)buff[i]=0;
-    		read(connfd,buff,sizeof(buff));
-		ep.in_v = (short)(buff[s-1]>>4);
-		ep.out_v = (short)(buff[s-1]&0x0F);
-		ep.synt = (char)((buff[s-2]>>4)&0x01);
-		ep.dist = (char)((buff[s-2]>>3)&0x01);
-		ep.dist_type = (short)(buff[s-2]&0x07);
-		ep.dist_ammount = (int)(((buff[s-3]>>1))&0x7F);
-		ep.echo = (char)(buff[s-3]&0x01);
-		ep.echo_bpm = (int)buff[s-4];
-		ep.echo_when = (int)buff[s-5];
-		ep.echo_reps = (int)buff[s-6];
-		printf("client sended->\n in_v:%d out_v:%d \n synt:%d \ndist:%d dist_t:%d dist_a:%d\n echo:%d echo_bpm:%d echo_when:%d echo_reps:%d\n",ep.in_v,ep.out_v,ep.synt,ep.dist,ep.dist_type,ep.dist_ammount,ep.echo,ep.echo_bpm,ep.echo_when,ep.echo_reps);
-		connfd = accept(sockfd, (SA*)&cli, &len); 
-    } 
-    //close the socket 
-    close(sockfd); 
+	while(1){
+		//printf("time: %d\n", clock()-ttime);
+		//ttime=clock();
+		/*	
+		//printf("x\n");	
+		if(gpio_readValue(BTN_DIST)) {
+			mask ^= 1<<2;
+			gpio_setValue(OUT_DIST,mask&(1<<2));
+			usleep(500000);
+		}
+		if(gpio_readValue(BTN_ECHO)) {
+			mask ^= 1<<1;
+			gpio_setValue(OUT_ECHO,mask&(1<<1));
+			usleep(500000);
+		}
+		if(gpio_readValue(BTN_SYNT)) {
+			mask ^= 1<<0;
+			gpio_setValue(OUT_SYNT,mask&(1<<0));
+			usleep(500000);
+		}
+		if(gpio_readValue(BTN_VLUP)){
+			printf("%d\n",in_v);
+			++in_v;
+			usleep(500000);
+		}
+		if(gpio_readValue(BTN_VLDW)){
+			if(in_v>0)--in_v;
+			printf("%d\n",in_v);
+			usleep(500000);
+		}*/
+	}
 }
 void th2_work(){
-
-	while(1){
-		while(!detect_start);
-		detect_start = 0;
-		detect_finished = 0;
-		nota = detectNote(savedbuff,savedbuff_size,pos_in_savedbuff,rate);
-		detect_finished = 1;
-	}
+		//++pablo;
+		/*
+		while(!th1_start);
+		th1_ready=0;
+		th1_start=0;
+		nota = detectNote(th1buff,buff_size,rate);
+		//printf("nota: %d\n", nota);
+		if(nota>100 || nota==-10){
+			th1_valid=1;
+			//printf("nota: %d\n",nota);
+		}
+		while(th1_valid==1);//espera a la consumicio
+		th1_ready=1; //es preparar per rebre noves dades
+		//else th1_valid=0;
+		*/
 
 }
 void init(){
@@ -432,7 +332,7 @@ void init(){
 	snd_pcm_hw_params_any(handle,params);
 	//set params
 	err = snd_pcm_hw_params_set_access(handle,params,SND_PCM_ACCESS_RW_INTERLEAVED);
-	if(err<0) printf("Cant set interleaved mode. %s \n", strerror(errno));
+	if(err<0) printf("Cant set inreleaved mode. %s \n", strerror(errno));
 
 	err = snd_pcm_hw_params_set_format(handle,params,SND_PCM_FORMAT_S16_LE);
 	if(err<0) printf("Cant set format. %s \n", strerror(errno));
@@ -591,20 +491,20 @@ void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* 
 	}
 }
 void process_params(int argc, char* argv[]){
-/*	
+	
 	if(argc<4) printf("falten params:\n sudo ./main.o in_v out_v mask dist_type/echo_time dist_ammount/echo_reps\n");
-	ep.in_v = atoi(argv[1]);
-	ep.out_v= atoi(argv[2]);
+	in_v = atoi(argv[1]);
+	out_v= atoi(argv[2]);
 	mask = atoi(argv[3]);
 	if((mask&0x01)!=0) nthreads=3;
 	else nthreads=2;
 
 	if((mask&0x04)!=0){
-		ep.dist_type   =atoi(argv[4]);
-		ep.dist_ammount=atoi(argv[5]);	
+		dist_type   =atoi(argv[4]);
+		dist_ammount=atoi(argv[5]);	
 	}
 	if((mask&0x02)!=0){
-		ep.echo_time = atoi(argv[4]);
-		ep.echo_reps = atoi(argv[5]);
-	}*/
+		echo_time = atoi(argv[4]);
+		echo_reps = atoi(argv[5]);
+	}
 }

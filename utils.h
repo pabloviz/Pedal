@@ -2,7 +2,7 @@
 #include "defines.h"
 
 
-int sigadd(int a, int b);
+STYPE sigadd(STYPE a, STYPE b);
 
 
 
