@@ -91,7 +91,7 @@ static void callback(struct libusb_transfer* transfer){
 
 
 	//printf("thread num %d\n",omp_get_thread_num());
-	if(pablo<200)++pablo;
+	if(pablo<10000)++pablo;
 	if (transfer->status != LIBUSB_TRANSFER_COMPLETED){
 		printf("Transfer not completed. status = %d \n",transfer->status);
 		return;
@@ -107,54 +107,36 @@ static void callback(struct libusb_transfer* transfer){
 			realsize = packet->actual_length;
 		}
 	}
+	
+	int read_v = 0;
+	int write_v = 0;
+
 	int err;
-	//char bu[realsize];	
-	//read(0,bu,realsize);	
+	unsigned char bu[realsize];
+	int bytefile=-1;
+	if(read_v)read(0,bu,realsize);
+		
 	for(int i=0; i<realsize;i+=1){
 		
-		//buff[buffindex] = transfer->buffer[i];
-		//bu[0] = transfer->buffer[i];
-		//read(0,bu,1);
-		//
-		char bu[1];
-		read(0,bu,1);
-		char num[4];
-		int ii=0;
-		while(bu[0]!=10){
-			num[ii]=bu[0];
-			++ii;
-			read(0,bu,1);
-		}
-		//printf("%d :",ii);
-		char realnum[ii];
-		for(int kk=0;kk<ii;++kk) realnum[kk]=num[kk];
-		int a = atoi(realnum);	
-		buff[buffindex] = (char)a;
+		buff[buffindex] = transfer->buffer[i];
+		if(write_v) printf("%c",buff[buffindex]);
+		if(read_v)buff[buffindex] = bu[i];
 		++buffindex;
-		printf("%d\n",buff[buffindex-1]);
-		//if(i==10)exit(0);
-		//printf("%d\n",transfer->buffer[i]);
 
 		if(buffindex>=buff_size){
-		//printbuff(buff,buff_size);	
-		//synth(440,0,buff,buff_size,rate);
+			//printf(" HOLA \n");
+		 	//if(write_v)printbuff(buff,buff_size);
+			//exit(0);	
+			savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
 
-			//savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
-			//reverb(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff);
-			//savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
-			//printf("pos_in_savedbuff : %d\n",pos_in_savedbuff);
-			//
-			/*echo(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff
-			    ,120,0.5,10);*/
-
-			//flanger(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff,120);
-			//applyeffects();
+			applyeffects();
 			err = snd_pcm_writei(handle,buff,frames);
 			if(err<0){
 				printf("error snd, prepare , %s\n",strerror(errno));
 				snd_pcm_prepare(handle);
 			}
 			buffindex=0;
+			//if(pablo>=3000) exit(0);
 		}
 	}
 	err = libusb_submit_transfer(transfer);
@@ -202,6 +184,12 @@ void applyeffects(){
 	//return;
 	if(ep.dist)
 		distorsion(buff,buff_size,ep.dist_ammount,ep.dist_type);
+	
+	STYPE * sbuff = (STYPE *)&(buff[0]);
+	for(int i=0; i<buff_size/BXS; i+=2){
+		int r = rand()%1024;
+		sbuff[i] = sigadd(sbuff[i],r - 512);
+	}
 
 	if(ep.out_v!=8){
 		double vol = ((double)(ep.out_v * ep.out_v))/64.0;

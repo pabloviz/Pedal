@@ -1,5 +1,6 @@
 #include "effects.h"
 #include "utils.h"
+#include <fcntl.h>
 //new
 //
 double cachedvalue = -1.0;
@@ -433,11 +434,10 @@ void flanger(char * buff, int buff_size, char * savedbuff, int savedbuff_size, i
 
 }
 
-
 void printbuff(char* buff, int buff_size){
 
 	STYPE* sbuff = (STYPE*)(&buff[0]);
-	for(int i=0; i<buff_size/BXS;i+=1){
+	for(int i=0; i<buff_size/BXS;i+=2){
 		STYPE s = sbuff[i];
 		printf("%d\n",s);
 	}
