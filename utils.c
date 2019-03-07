@@ -2,6 +2,15 @@
 #include "defines.h"
 
 
+
+STYPE max(STYPE a, STYPE b){
+	return a - ( (a-b) & -(a<b));
+}
+STYPE min(STYPE a, STYPE b){
+	return a - ( (a-b) & -(a>b));
+}
+
+
 STYPE sigadd(STYPE a, STYPE b){
 	int tmp = (int)a + (int)b;
 	if(tmp>MAXVALUE) return MAXVALUE;

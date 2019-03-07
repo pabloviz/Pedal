@@ -2,9 +2,13 @@
 #include "defines.h"
 
 
+
+
+STYPE max(STYPE a, STYPE b);
+
+STYPE min(STYPE a, STYPE b);
+
 STYPE sigadd(STYPE a, STYPE b);
-
-
 
 int vecToInt(char upper,char lower);
 

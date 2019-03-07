@@ -17,7 +17,6 @@
 #include <arpa/inet.h> //el pton
 #include "notes.h"
 #include "effects.h"
-#include "fft.h"
 #include "utils.h"
 #include "gpioControl.h"
 
@@ -72,6 +71,8 @@ int buffindex=0;
 int pablo = 0;
 double ttime = 0;
 int lalal =0;
+int lmaoindex = 0;
+char * lmao = (char*) -1;
 static void callback(struct libusb_transfer* transfer){
 
 	//struct timeval tv1;
@@ -112,30 +113,46 @@ static void callback(struct libusb_transfer* transfer){
 	int write_v = 0;
 
 	int err;
-	unsigned char bu[realsize];
-	int bytefile=-1;
+	unsigned char bu[realsize]; 
+	if (lmao == (char*)-1 && write_v==1) {
+		printf("hola\n");
+		lmao = (char *)malloc(500000);
+	}
 	if(read_v)read(0,bu,realsize);
 		
 	for(int i=0; i<realsize;i+=1){
 		
 		buff[buffindex] = transfer->buffer[i];
-		if(write_v) printf("%c",buff[buffindex]);
+		if(write_v) {
+			if(lmaoindex==500000){
+				for(int i=0; i<500000; ++i)
+					printf("%c",lmao[i]);
+				exit(0);
+			}
+			lmao[lmaoindex] = transfer->buffer[i];
+			//printf("%c",buff[buffindex]);
+			++lmaoindex;
+		}
 		if(read_v)buff[buffindex] = bu[i];
 		++buffindex;
 
 		if(buffindex>=buff_size){
 			//printf(" HOLA \n");
 		 	//if(write_v)printbuff(buff,buff_size);
+			//for(int i=0; i<1024; ++i) printf("%c",buff[i]);
 			//exit(0);	
 			savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
 
 			applyeffects();
+			//for(int i=0; i<1024; ++i) printf("%c",buff[i]);
+			//exit(0);
 			err = snd_pcm_writei(handle,buff,frames);
 			if(err<0){
 				printf("error snd, prepare , %s\n",strerror(errno));
 				snd_pcm_prepare(handle);
 			}
 			buffindex=0;
+			//exit(0);
 			//if(pablo>=3000) exit(0);
 		}
 	}
@@ -159,6 +176,10 @@ void applyeffects(){
 //	ep.dist=1;
 	//ep.dist_ammount=64;
 	//ep.synt = 1;
+	//
+	lala(buff,buff_size,100,1);
+	return;
+
 	if(ep.in_v!=8){
 		double vol = ((double)(ep.in_v * ep.in_v))/64.0;
 		buff_volume_adjust(buff,0,buff_size,vol);
@@ -185,11 +206,6 @@ void applyeffects(){
 	if(ep.dist)
 		distorsion(buff,buff_size,ep.dist_ammount,ep.dist_type);
 	
-	STYPE * sbuff = (STYPE *)&(buff[0]);
-	for(int i=0; i<buff_size/BXS; i+=2){
-		int r = rand()%1024;
-		sbuff[i] = sigadd(sbuff[i],r - 512);
-	}
 
 	if(ep.out_v!=8){
 		double vol = ((double)(ep.out_v * ep.out_v))/64.0;
