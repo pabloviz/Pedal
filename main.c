@@ -115,7 +115,6 @@ static void callback(struct libusb_transfer* transfer){
 	int err;
 	unsigned char bu[realsize]; 
 	if (lmao == (char*)-1 && write_v==1) {
-		printf("hola\n");
 		lmao = (char *)malloc(500000);
 	}
 	if(read_v)read(0,bu,realsize);
@@ -123,37 +122,56 @@ static void callback(struct libusb_transfer* transfer){
 	for(int i=0; i<realsize;i+=1){
 		
 		buff[buffindex] = transfer->buffer[i];
+		if(read_v)buff[buffindex] = bu[i];
+		++buffindex;
 		if(write_v) {
 			if(lmaoindex==500000){
-				for(int i=0; i<500000; ++i)
+				//buff_volume_adjust(lmao,0,lmaoindex,4);
+				lala(lmao,lmaoindex,2,1);
+				for(int i=0; i<lmaoindex; ++i)
 					printf("%c",lmao[i]);
 				exit(0);
 			}
-			lmao[lmaoindex] = transfer->buffer[i];
+			if(!read_v)lmao[lmaoindex] = transfer->buffer[i];
+			else lmao[lmaoindex] = bu[i];
 			//printf("%c",buff[buffindex]);
 			++lmaoindex;
 		}
-		if(read_v)buff[buffindex] = bu[i];
-		++buffindex;
 
 		if(buffindex>=buff_size){
 			//printf(" HOLA \n");
 		 	//if(write_v)printbuff(buff,buff_size);
 			//for(int i=0; i<1024; ++i) printf("%c",buff[i]);
-			//exit(0);	
-			savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
-
-			applyeffects();
-			//for(int i=0; i<1024; ++i) printf("%c",buff[i]);
 			//exit(0);
+			//printf("ini\n");
+
+	
+			//lala(buff,buff_size,2,1);
+			savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
+			applyeffects();
+			
+
+			//printf("Pablo %d\n",pablo);
+			/*if(pablo>=6*12){
+				for(int j=0; j<buff_size*12; ++j) printf("%c",savedbuff[j]);
+				exit(0);
+			}*/	
+	
+			//applyeffects();
+
+			//if(pablo>=2000){
+				//for(int i=0; i<1024; ++i) printf("%c",buff[i]);
+				//exit(0);
+			//}
 			err = snd_pcm_writei(handle,buff,frames);
 			if(err<0){
 				printf("error snd, prepare , %s\n",strerror(errno));
 				snd_pcm_prepare(handle);
 			}
 			buffindex=0;
+			//printf("fin\n");
 			//exit(0);
-			//if(pablo>=3000) exit(0);
+			if(read_v && !write_v && pablo>=2500) exit(0);
 		}
 	}
 	err = libusb_submit_transfer(transfer);
@@ -177,8 +195,8 @@ void applyeffects(){
 	//ep.dist_ammount=64;
 	//ep.synt = 1;
 	//
-	lala(buff,buff_size,100,1);
-	return;
+	//synth(440,0,buff,buff_size,rate);
+	//lala(buff,buff_size,ep.dist_ammount/128,1);
 
 	if(ep.in_v!=8){
 		double vol = ((double)(ep.in_v * ep.in_v))/64.0;
@@ -204,8 +222,8 @@ void applyeffects(){
 		     ep.echo_bpm,((double)ep.echo_when)/100.0,ep.echo_reps);
 	//return;
 	if(ep.dist)
-		distorsion(buff,buff_size,ep.dist_ammount,ep.dist_type);
-	
+		//distorsion(buff,buff_size,ep.dist_ammount,ep.dist_type);
+		lala(buff,buff_size,ep.dist_ammount/128.0,ep.dist_type*ep.dist_type);
 
 	if(ep.out_v!=8){
 		double vol = ((double)(ep.out_v * ep.out_v))/64.0;
@@ -256,6 +274,9 @@ int main(int argc, char* argv[])
 	inisintable();
 	//printf("%lf\n",getSin(1.5*PI));
 	inicostable();
+	//th[0-450-100] soft[0-4-10] hard [0-7-10]
+	iniDiode(450, 4, 7){
+	//iniDiodeTable();
 	//printf("%lf\n",getCos(100));
 
 

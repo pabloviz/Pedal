@@ -52,6 +52,8 @@ void quadunion(STYPE * buff, int buff_size, int A, int B, int Y, int power){
 	int vy = Y - power;
 	double l = ((double)(Y-vy))/((B-vx)*(B-vx));
 	for(int i=A; i<=B; i+=2){
+		//buff[i] = 0;
+		//printf("%d\n",Y);
 		buff[i] = l*(i-vx)*(i-vx) + vy;	
 	}
 }

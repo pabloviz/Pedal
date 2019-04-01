@@ -1,5 +1,6 @@
 #include "effects.h"
 #include "utils.h"
+#include "Diode.h"
 #include <fcntl.h>
 //new
 //
@@ -253,7 +254,7 @@ int detectNote(/*char*buff,int buff_size,*/char* savedbuff,int savedbuff_size,in
 		}
 
 	}
-	printf("aixo no hauria de passar\n");
+	//printf("aixo no hauria de passar\n");
 etiqueta:
 	flag=0;
 	double result = (rate*posd*BXS)/(N);
@@ -335,57 +336,22 @@ void synth(int f, int instr, char* buff, int buff_size,int rate){ //a 16 bits
 
 	
 }
-//int pos = -1;
-//int posn = -1;
-//int pablito=0;
-//
-//
-//int pendent =0;
-int * minmaxs = (int *)-1;
-int minmaxsindex;
+
+
+
+
 void lala(char * buff, int buff_size, double dis, int tipo){
-
-
-	short * sbuff = (short*)&(buff[0]);
-	int pendent = (sbuff[2] > sbuff[0]);
-	int new_pendent;
-	if(minmaxs==(int*)-1) minmaxs = (int *)malloc(sizeof(int)*buff_size/BXS);
-	minmaxsindex=0;
-	for(int i=2; i<buff_size/BXS; i+=2){
-		new_pendent = (sbuff[i] > sbuff[i-2]);
-		if (new_pendent != pendent) {
-			//printf("max at i = %d / i/2 = %d => %d\n",i,i/2,sbuff[i]);
-			minmaxs[minmaxsindex] = i;
-			++minmaxsindex;				
-		}
-		pendent = new_pendent;
-		//printf("i: %d b: %d\n",i,sbuff[i]);
+	STYPE* sbuff = (STYPE*) &(buff[0]);
+	//dis = 0.95;
+	lowpass(buff, buff_size, tipo);
+	for(int i=0; i<buff_size/BXS; i+=2){
+		STYPE old = sbuff[i];
+		STYPE new = getDiode(old);
+		if(old<0) sbuff[i] = old*(1-dis) - new*dis;
+		else if (old>0) sbuff[i] = old*(1-dis) + new*dis;
+		//else sbuff[i] = 0;
 	}
-	for(int i=0; i<minmaxsindex; ++i){
-		int index = minmaxs[i];
-		//printf("index %d\n",index);
-		STYPE v = sbuff[index];
-		STYPE mask = (STYPE)(-(v<0));
-		int limit = ((v^mask)-mask)/128 + 1;
-		//printf("limit %d\n",limit);
-
-		int tmp=0;
-		if(i>0)tmp=minmaxs[i-1];
-		for(int j=index; j>0 && j>tmp && j>index-limit; j-=2){
-			sbuff[j]=0;//posarho a 0 fot una distorsio de la parra
-		}
-		tmp = buff_size/BXS;
-		if(i<minmaxsindex-1)tmp=minmaxs[i+1];
-		for(int j=index; j<buff_size/BXS && j<tmp && j<index+limit;j+=2){
-			sbuff[j]=0;
-		}	
-	}
-
-
-	//exit(0);
 }
-
-
 
 
 void distorsion(char* buff, int buff_size, double dis, int tipo){
@@ -492,4 +458,16 @@ void printbuff(char* buff, int buff_size){
 		printf("%d\n",s);
 	}
 	//printf("\n\n\naaaaaaaaaaa\n\n\n");
+}
+STYPE last_low = 0;
+void lowpass(char* buff, int buff_size, int ammount){
+	double alfa = (double)ammount/10.0;
+	//printf("%lf\n",alfa);
+	STYPE* sbuff = (STYPE*) (&buff[0]);
+	for (int i=0; i<buff_size/BXS; i+=2){
+		sbuff[i] = sbuff[i]*(1.0-alfa) + last_low*alfa;
+		last_low = sbuff[i];	
+	}
+
+
 }

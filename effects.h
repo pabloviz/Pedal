@@ -36,3 +36,4 @@ void synth(int f,int instr, char* buff, int buff_size,int rate);
 void chorus(int f, char * buff, int buff_size, int rate);
 void flanger(char * buff, int buff_size, char * savedbuff, int savedbuff_size, 
 	     int pos_in_savedbuff, int bpm);
+void lowpass(char* buff, int buff_size, int ammount);

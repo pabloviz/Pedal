@@ -2,7 +2,9 @@
 #include "defines.h"
 
 
-
+	//	STYPE mask = (STYPE)(-(v<0));
+	//	int limit = ((v^mask)-mask)/128 + 1;
+#define myabs(x) ((x^(-(x<0)))-(x<0))
 
 STYPE max(STYPE a, STYPE b);
 
