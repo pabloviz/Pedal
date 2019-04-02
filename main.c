@@ -19,6 +19,7 @@
 #include "effects.h"
 #include "utils.h"
 #include "gpioControl.h"
+#include "Diode.h"
 
 #define SA struct sockaddr 
 #define MYTYPE char
@@ -275,7 +276,7 @@ int main(int argc, char* argv[])
 	//printf("%lf\n",getSin(1.5*PI));
 	inicostable();
 	//th[0-450-100] soft[0-4-10] hard [0-7-10]
-	iniDiode(450, 4, 7){
+	iniDiode(5000, 9, 7);
 	//iniDiodeTable();
 	//printf("%lf\n",getCos(100));
 
