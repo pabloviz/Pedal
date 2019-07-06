@@ -1,7 +1,7 @@
 #include "effects.h"
 #include "utils.h"
 #include "Diode.h"
-#include <fcntl.h>
+#include <sys/time.h>
 //new
 //
 double cachedvalue = -1.0;
@@ -54,76 +54,6 @@ void echo(char* buff, int buff_size, char* savedbuff, int savedbuff_size,
 	}
 }
 
-
-/*
-int howmany=-1;
-char* echobuff = (char*)-1;
-void echo(int period, char* buff, int buff_size,int ret, int layers){ //layers default = 1
-		if(layers<=0) return;
-		if(echobuff == (char*)-1 || howmany==-1){ //TODO cuidado malloc massa gran
-			howmany = (ret*1000)/period;
-			//printf("howmany : %d\n",howmany);
-			echobuff_size = buff_size*howmany;
-			//printf("echobuff_size: %d\n",echobuff_size);
-			echobuff = (char*)malloc(echobuff_size);
-			echobuff_index = 0;
-			for(int i=0; i<echobuff_size; ++i) echobuff[i]=0;
-		}
-		//double power = 1.0/(double)layers+1;
-		int tmp_howmany = howmany/layers;
-		int index;
-		char temp[buff_size];
-		for(int i=0; i<buff_size;++i) temp[i] = buff[i];
-		STYPE* sbuff = (STYPE*)&(buff[0]);
-		STYPE* sebuff =(STYPE*)&(echobuff[0]);
-		//double power_m=-BXS/(layers*buff_size); //en realitat el bxs esta dividinti
-		//double power;
-		for(int j=1; j<=layers; ++j)
-		{
-			double power = (double)layers/((layers+1)*j*4.0);
-			//double power = 1.0/((layers+1)*j*1.0);
-			if(j==layers) power = 0.05;
-			int samples_back = tmp_howmany*j*buff_size;//quantes mostres enrere (8bits)
-			if (samples_back%2==1) printf("ei\n");
-			if (samples_back>howmany*buff_size){
-				printf("error\n");
-				return;
-			}
-			//samples_back/=BXS;//mostres enrere en 16 bits
-			//printf("shorts back %d\n",samples_back);
-			for(int i=0; i<buff_size/BXS; i+=1){
-				int actualindex = echobuff_index*buff_size +BXS*i;//a nivell de byte
-				int ecoindex = actualindex - samples_back;
-				//printf("index %d\n",index);
-				if (ecoindex<0)ecoindex = echobuff_size+ecoindex;
-				STYPE new_value = sbuff[i];
-				//power = power_m*(l*buff_size/BXS + i)+1.0;
-				STYPE old_value = sebuff[ecoindex/BXS]*power;
-				//if(old_value<50 && old_value>-50)old_value=0;
-				//printf("i: %d, index:%d\n",echobuff_index*buff_size/BXS + i,index/BXS);
-				if(((int)new_value + (int)old_value )>32767) sbuff[i]=32767;
-				else if (((int)new_value + (int)old_value)<-32767) sbuff[i] = -32767;
-				
-				else sbuff[i] = new_value+old_value;
-				//new_value = sigadd(old_value,new_value);
-				//new_value = old_value + new_value;
-				//if(new_value>65535) new_value= new_value|0xFF00;
-				//buff[i] = (new_value>>8);
-				//buff[i+1] = (new_value&0x0FF);
-			}
-
-		}
-		//buff_volume_adjust(buff,0,buff_size,0.5);
-		//actualitzar echo buffer
-		for(int i=0;i<buff_size;++i) {
-			echobuff[echobuff_index*buff_size +i] = temp[i];
-		}
-		++echobuff_index;
-		if(echobuff_index >= howmany)echobuff_index=0;
-
-		//printf("xd: %d \n", volume_adjust(30,100));
-
-}*/
 void reverb(char* buff, int buff_size, char* savedbuff, int savedbuff_size,
 	  int savedbuff_pos){
 	
@@ -176,33 +106,12 @@ void reverb(char* buff, int buff_size, char* savedbuff, int savedbuff_size,
 //int detectbuff_howmany=5;
 //int counter=0;
 int detectNote(/*char*buff,int buff_size,*/char* savedbuff,int savedbuff_size,int savedbuff_pos,int rate){
-
+/*
 	clock_t start, end;
 	double cpu_time_used;
 	start = clock();
-
-	//STYPE * sbuff = (STYPE *)&(buff[0]);
-	/*
-	for(int i=0; i<buff_size/BXS;++i)if(sbuff[i]>50) goto jeje;
-	return -10;
-	jeje:
-	
-	if(detectbuff==(char*)-1){
-		counter = 0;
-		detectbuff_size = detectbuff_howmany*buff_size/2; 
-		//diria que el 2 es per l'interleaved
-		detectbuff = (char *)malloc(detectbuff_size);
 	}
-	if(counter==detectbuff_howmany){ counter=0;}
-	else{
-		for(int i=0; i<buff_size; i+=4) {
-			int index = (detectbuff_size/detectbuff_howmany)*counter +i/2;
-			detectbuff[index]=buff[i];
-			detectbuff[index+1]=buff[i+1];
-		}
-		++counter;
-		return -1;
-	}*/
+*/
 	int factor = 128;
 	int N = savedbuff_size/factor;
 	N = N/(2*BXS);
@@ -258,37 +167,14 @@ int detectNote(/*char*buff,int buff_size,*/char* savedbuff,int savedbuff_size,in
 etiqueta:
 	flag=0;
 	double result = (rate*posd*BXS)/(N);
-	end = clock();
-	cpu_time_used = ((double)(end-start))/CLOCKS_PER_SEC;
+	//end = clock();
+	//cpu_time_used = ((double)(end-start))/CLOCKS_PER_SEC;
 	//printf("time: %lf\n",cpu_time_used);
 	//printf("%d\n",(int)result);
 	return (int)result;
 
 }
 
-void buff_volume_adjust(char * buff, int ini, int buff_size,double volume){
-	//return c*volume/100;
-	//double dc = 10.0;
-	//double v = volume*volume*volume;
-	short* sbuff = (short*)&(buff[0]);
-	if(ini%2==1) printf("ini ha de ser un nombre parell");
-	for(int i=0; i<buff_size/2; i+=1){
-		int new = (int)sbuff[i]*volume;
-		if(new>32767)new=32767;
-		else if (new<-32767)new=-32767;
-		sbuff[i]=(STYPE)new;
-		/*int ivalue = (buff[i]<<8) + (buff[i+1]&0x0FF);
-		int fvalue = ((double)(ivalue-32767)*v + 32767);
-		if(fvalue>65535)fvalue=65535;
-		buff[i] = fvalue>>8;
-		buff[i+1] = fvalue&0x0FF;
-		//printf("%d %d %d\n",i,ivalue,fvalue);*/
-	}
-
-	//unsigned short* sbuff = (unsigned short *)buff;
-	//for(int i=0; i<buff_size/2;++i)printf("%d %d\n",i,sbuff[i]);
-
-}
 
 int* inside_period=(int *)-1;
 double* fd=(double *)-1;
@@ -325,116 +211,24 @@ void synth(int f, int instr, char* buff, int buff_size,int rate){ //a 16 bits
 			if(inside_period[j]>=fd[j])inside_period[j]=0;
 		}
 	}
-
-	
-	/*FILE* fid  = fopen("sortida2.txt", "w+");
-	if(fid<=0)printf("lalala %s", strerror(errno));
-	for(int i=0; i<buff_size;++i){
-		fprintf(fid,"%d %d\n",i,buff[i]);
-	}
-	fclose(fid);*/
-
-	
 }
 
 
 
-
+//molt optimitzable
 void lala(char * buff, int buff_size, double dis, int tipo){
 	STYPE* sbuff = (STYPE*) &(buff[0]);
 	//dis = 0.95;
-	lowpass(buff, buff_size, tipo);
+	//lowpass(buff, buff_size, tipo);
 	for(int i=0; i<buff_size/BXS; i+=2){
 		STYPE old = sbuff[i];
-		STYPE new = getDiode(old);
+		STYPE new;
+		if (old<0) new = getDiode(-old);
+		else new = getDiode(old);
 		if(old<0) sbuff[i] = old*(1-dis) - new*dis;
 		else if (old>0) sbuff[i] = old*(1-dis) + new*dis;
 		//else sbuff[i] = 0;
 	}
-}
-
-
-void distorsion(char* buff, int buff_size, double dis, int tipo){
-	//printf("%d -> %d\n",0xFFFE,vecToInt(0xFF,0xFF));
-	//printf("@c %d \n",(int)buff);
-	short* sbuff = (short*)&(buff[0]);
-
-	double den = (dis/4.0) + 1.0;
-	int limit = 32767.0/den;
-	//printf("limit: %d\n",limit);
-	//return;
-	int pos = -1;
-	int posn = -1;
-	int a,b;
-	double l;
-	//int tipo = 2;//0:linear, 1:quadratic, 2:cubic, 3:atenuation
-	for(int i=0; i<buff_size/BXS; i+=2){
-		if (sbuff[i]>limit && pos==-1) {//obrim
-			if(tipo!=0)pos=i;
-			else sbuff[i]=limit;
-		}else if ((i==(buff_size/BXS)-2 || sbuff[i]<limit) && pos!=-1){//tanquem
-			if(tipo==1){
-				quadunion(sbuff,buff_size,pos,i,limit,5);
-			}else if(tipo==2){
-				if(pos==0){
-					int lon = (i-pos)/2;
-					if(lon%2!=0)++lon;
-					quadunion(sbuff,buff_size,0,lon,limit,5);
-					quadunion(sbuff,buff_size,lon,i,limit,-5);
-				}
-				if(i==(buff_size/BXS)-2){
-					quadunion(sbuff,buff_size,pos,i,limit,-5);
-				}else if(pos!=0){
-					int lon = (i-pos)/3;
-					if (lon%2!=0)++lon;
-					int l1 = pos + lon;
-					int l2 = l1 + lon;
-					quadunion(sbuff,buff_size,pos,l1,limit,-5);
-					quadunion(sbuff,buff_size,l1,l2,limit,5);
-					quadunion(sbuff,buff_size,l2,i,limit,-5);
-				}
-			}else if(tipo==3){
-				for(int j=pos;j<=i;j+=2)sbuff[j]=((sbuff[j]-limit)*0.4)+limit;
-			}
-			pos = -1;	
-		}else if (sbuff[i]<-limit && posn==-1){//obrim
-			if(tipo!=0)posn=i;
-			else sbuff[i]=-limit;
-		}else if ((i==(buff_size/BXS)-2 ||sbuff[i]>-limit) && posn!=-1){//tanquem
-			if(tipo==1){
-				quadunion(sbuff,buff_size,posn,i,-limit,-5);
-			}
-			else if(tipo==2){
-				if(posn==0){
-					int lon = (i-posn)/2;
-					if(lon%2!=0)++lon;
-					quadunion(sbuff,buff_size,0,lon,-limit,-5);
-					quadunion(sbuff,buff_size,lon,i,-limit,5);
-				}else if(i==(buff_size/BXS)-2){
-					quadunion(sbuff,buff_size,posn,i,-limit,5);
-				}else{
-					int lon = (i-posn)/3;
-					if(lon%2!=0)++lon;
-					int l1 = posn +lon;
-					int l2 = l1 + lon;
-					quadunion(sbuff,buff_size,posn,l1,-limit,5);
-					quadunion(sbuff,buff_size,l1,l2,-limit,-5);
-					quadunion(sbuff,buff_size,l2,i,-limit,5);
-				}
-			}else if(tipo==3){
-				for(int j=pos;j<=i;j+=2)sbuff[j]=((sbuff[j]+limit)*0.5)-limit;
-
-			}
-
-			posn=-1;
-		}
-		//printf("%d %d\n",i,sbuff[i]);
-	}
-	/*
-	for(int i=0; i<buff_size; i+=2){
-		int value = vecToInt(buff[i+1],buff[i]);
-		printf("%d %d\n",i/2,value);		
-	}*/	
 }
 
 
@@ -448,16 +242,6 @@ void flanger(char * buff, int buff_size, char * savedbuff, int savedbuff_size, i
 
 
 
-}
-
-void printbuff(char* buff, int buff_size){
-
-	STYPE* sbuff = (STYPE*)(&buff[0]);
-	for(int i=0; i<buff_size/BXS;i+=2){
-		STYPE s = sbuff[i];
-		printf("%d\n",s);
-	}
-	//printf("\n\n\naaaaaaaaaaa\n\n\n");
 }
 STYPE last_low = 0;
 void lowpass(char* buff, int buff_size, int ammount){

@@ -50,9 +50,7 @@ void iniDiode(int th, int soft, int hard){
 }
 
 
-STYPE getDiode(STYPE i){
-
-	
+STYPE getDiode(STYPE i){	
 	for(int j=0;j<DIODE_N;++j){
 		if(i<=lims[j]){
 			if(j==0) return i*mult[j];

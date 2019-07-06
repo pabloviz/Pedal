@@ -2,7 +2,6 @@
 #include "defines.h"
 
 
-
 STYPE max(STYPE a, STYPE b){
 	return a - ( (a-b) & -(a<b));
 }
@@ -10,6 +9,14 @@ STYPE min(STYPE a, STYPE b){
 	return a - ( (a-b) & -(a>b));
 }
 
+inline STYPE mult_sat(STYPE val, double mult){
+	int tmpval = (int)(val*mult);
+	int mask1 = -(tmpval>MAXVALUE);
+	int mask2 = -(tmpval<-MAXVALUE);
+	return (MAXVALUE&mask1)|(-MAXVALUE&mask2)|(tmpval&(!mask1)&(!mask2));
+
+
+}
 
 STYPE sigadd(STYPE a, STYPE b){
 	int tmp = (int)a + (int)b;
@@ -18,6 +25,35 @@ STYPE sigadd(STYPE a, STYPE b){
 	return a + b;
 }
 
+void buff_volume_adjust(char * buff, int ini, int buff_size,double volume){
+	//struct timeval tv1,tv2;
+	//gettimeofday(&tv1,NULL);
+	short* sbuff = (short*)&(buff[0]);
+	if(ini%2==1) printf("ini ha de ser un nombre parell");
+	for(int i=0; i<buff_size/BXS; i+=2){
+		int new = (int)sbuff[i]*volume;
+		if(new>MAXVALUE)new=MAXVALUE;
+		else if (new<-MAXVALUE)new=-MAXVALUE;
+		else sbuff[i]=(STYPE)new;
+	}
+	//gettimeofday(&tv2,NULL);
+	//printf("time: %d\n",(tv2.tv_usec-tv1.tv_usec));
+}
+
+void printbuff(char* buff, int buff_size){
+
+	int fd = open("plot", O_CREAT | O_RDWR, 0644);
+	STYPE* sbuff = (STYPE*)(&buff[0]);
+	char buffer[20];
+	sprintf(buffer,"#X Y\n");
+	write(fd,buffer,strlen(buffer));
+	for(int i=0; i<buff_size/BXS;i+=2){
+		STYPE s = sbuff[i];
+		sprintf(buffer,"%d %d\n",i,s);
+		write(fd,buffer,strlen(buffer));
+	}
+	//printf("\n\n\naaaaaaaaaaa\n\n\n");
+}
 void bufftozero(char* buff, int ini, int buff_size){
 	STYPE* sbuff = (STYPE*)(&buff[0]);
 	for(int i=ini; i<buff_size/BXS;++i) sbuff[i]=0;

@@ -11,3 +11,9 @@
 #define OUT_DIST 16
 #define OUT_ECHO 20
 #define OUT_SYNT 21
+
+#define CODE_GEN 0x0
+#define CODE_VOL 0x1
+#define CODE_DIS 0x2
+#define CODE_ECH 0x3
+#define CODE_SYN 0x4

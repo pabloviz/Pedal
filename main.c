@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include<errno.h>
+#include <errno.h>
 #include <alsa/asoundlib.h>
 #include <math.h>
 #include <fcntl.h>
@@ -21,11 +21,16 @@
 #include "gpioControl.h"
 #include "Diode.h"
 
+#define IP "192.168.1.155"
+//#define IP "192.168.43.213"
 #define SA struct sockaddr 
 #define MYTYPE char
-#define ISOSIZE 180
+#define ISOSIZE_I 180
+#define ISOSIZE_O 96
 #define INTERFACE 2
 #define ALTSETTING 3
+#define INTERFACE_O 1
+#define ALTSETTING_O 1 
 
 static char *device = "default";
 
@@ -39,19 +44,21 @@ char* buff;
 char* savedbuff;
 int pos_in_savedbuff;
 int period;
-//char *tramabus;
 int buff_size;
 int savedbuff_size;
 int mask = 0;
 int nthreads=0;
+
+int sendd=0;
 
 void process_params(int argc, char* argv[]);
 void DeviceScan(libusb_context *ctx, libusb_device **devs);
 void init_output();
 void iniusblib(libusb_context * ctx);
 libusb_device_handle* selectDevice(libusb_context *ctx, int vid, int pid, int interface, int alt_setting);
-void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* trans);
 
+void iniTransmission_i(libusb_device_handle * dev_handle, struct libusb_transfer* trans);
+void iniTransmission_o(libusb_device_handle * dev_handle, struct libusb_transfer* trans);
 void th0_work();
 void th1_work();
 void th2_work();
@@ -70,29 +77,20 @@ char hola;
 
 int buffindex=0;
 int pablo = 0;
-double ttime = 0;
 int lalal =0;
 int lmaoindex = 0;
 char * lmao = (char*) -1;
-static void callback(struct libusb_transfer* transfer){
-
-	//struct timeval tv1;
-	//gettimeofday(&tv1,NULL);
-	//printf("time: %d\n",(tv1.tv_usec-lalal));
-	//lalal = tv1.tv_usec;
-
-
-	//double tmp = clock();
-	//printf("time: %lf\n", tmp-ttime);
-	//ttime=clock();
-	
-	
-	//double tmp = omp_get_wtime();
-	//printf("time: %hf\n", tmp-ttime);
-	//ttime=tmp;
-
-
-	//printf("thread num %d\n",omp_get_thread_num());
+int enable = 1;
+double oldsec=0.0,newsec=0.0;
+static void callback_i(struct libusb_transfer* transfer){
+	//printf("i\n");
+	/*
+	struct timeval tv1;
+	gettimeofday(&tv1,NULL);
+	newsec  = (double)tv1.tv_sec*1000000.0 + (double)tv1.tv_usec;
+	printf("time: %lf\n",newsec-oldsec);
+	oldsec = newsec;
+	*/
 	if(pablo<10000)++pablo;
 	if (transfer->status != LIBUSB_TRANSFER_COMPLETED){
 		printf("Transfer not completed. status = %d \n",transfer->status);
@@ -123,6 +121,7 @@ static void callback(struct libusb_transfer* transfer){
 	for(int i=0; i<realsize;i+=1){
 		
 		buff[buffindex] = transfer->buffer[i];
+//		printf("%d %d\n",i,buff[buffindex]);
 		if(read_v)buff[buffindex] = bu[i];
 		++buffindex;
 		if(write_v) {
@@ -140,128 +139,106 @@ static void callback(struct libusb_transfer* transfer){
 		}
 
 		if(buffindex>=buff_size){
-			//printf(" HOLA \n");
-		 	//if(write_v)printbuff(buff,buff_size);
-			//for(int i=0; i<1024; ++i) printf("%c",buff[i]);
-			//exit(0);
-			//printf("ini\n");
-
-	
-			//lala(buff,buff_size,2,1);
-			savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
+//			lala(buff,buff_size,0.5,0);
+			//savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
 			applyeffects();
-			
-
 			//printf("Pablo %d\n",pablo);
 			/*if(pablo>=6*12){
 				for(int j=0; j<buff_size*12; ++j) printf("%c",savedbuff[j]);
 				exit(0);
 			}*/	
-	
-			//applyeffects();
-
-			//if(pablo>=2000){
+/*			if(pablo>=2000){
+				printbuff(buff,buff_size);
 				//for(int i=0; i<1024; ++i) printf("%c",buff[i]);
-				//exit(0);
-			//}
-			err = snd_pcm_writei(handle,buff,frames);
+				exit(0);
+				pablo=0;
+			}
+*/			err = snd_pcm_writei(handle,buff,frames);
 			if(err<0){
 				printf("error snd, prepare , %s\n",strerror(errno));
 				snd_pcm_prepare(handle);
 			}
+			sendd=buffindex;
 			buffindex=0;
-			//printf("fin\n");
-			//exit(0);
-			if(read_v && !write_v && pablo>=2500) exit(0);
 		}
+		if(read_v && !write_v && pablo>=2500) exit(0);
 	}
 	err = libusb_submit_transfer(transfer);
 	if(err!=0) printf("eeei\n");
 }
+int kk=0;
+static void callback_o(struct libusb_transfer* transfer){
+
+//	printf("o\n");
+//	printf("buffindex %d\n",sendd);
+//	if(send>0){
+//	} 
+	for(int i=0; i<96-1; i+=2){
+		short sin = (short)(getSin((double)kk/200.0)*32000);
+		char lower = sin&0x0FF;
+		char higher = (sin>>8)&0x0FF;
+		transfer->buffer[i+1]=higher;
+		transfer->buffer[i]=lower;
+		++kk;
+	}
+	int err = libusb_submit_transfer(transfer);
+	if(err!=0) printf("eeei\n");
+}
+
+
+
 
 int nota; int playnota=0;
 int detect_start=0,detect_finished=1;
 
 struct effectparams{
-    	int dist_ammount,echo_bpm,echo_when,echo_reps;
-    	short in_v,out_v,dist_type;
-    	char dist,echo,synt;
+	uint8_t enable,dist,echo,synt;
+    	uint8_t in_v, out_v;
+	uint8_t dist_tone,dist_ammount, dist_th, dist_soft, dist_hard;
+    	uint8_t echo_reps, echo_bpm, echo_when;
 };
 struct effectparams ep;
 
 void applyeffects(){
-	//ep.dist_ammount = 100;
-	//printf(" %d %lf \n",ep.in_v, ((double)ep.in_v*(double)ep.in_v)/64.0);
-//	ep.dist=1;
-	//ep.dist_ammount=64;
-	//ep.synt = 1;
-	//
-	//synth(440,0,buff,buff_size,rate);
-	//lala(buff,buff_size,ep.dist_ammount/128,1);
-
+	
+	if(ep.enable) savebuff(buff,buff_size,savedbuff,savedbuff_size,&pos_in_savedbuff);
+	ep.in_v = 9;
 	if(ep.in_v!=8){
 		double vol = ((double)(ep.in_v * ep.in_v))/64.0;
 		buff_volume_adjust(buff,0,buff_size,vol);
 	}
-	if(ep.synt){
-		if(detect_finished==1){
-			detect_finished=0;
-			detect_start=1;
-		//	detect_finished=0;
-			playnota = nota;
-			//printf("%d\n",playnota);
+	if(ep.enable){
+		if(ep.synt){
+			if(detect_finished==1){
+				detect_finished=0;
+				detect_start=1;
+				playnota = nota;
+			}
+			if(playnota>100) synth(playnota,0,buff,buff_size,rate);
+			else bufftozero(buff,0,buff_size);
 		}
-		if(playnota>100) synth(playnota,0,buff,buff_size,rate);
-		else bufftozero(buff,0,buff_size);
+		if(ep.echo) 
+			echo(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff,
+		     	     ep.echo_bpm,((double)ep.echo_when)/100.0,ep.echo_reps);
+		if(ep.dist)
+			lala(buff,buff_size,ep.dist_ammount/127.0,ep.dist_tone/256.0);
 	}
-	/*if((pos_in_savedbuff%2048)==0){
-		int ndn = detectNote(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff,rate);
-		printf("note : %d\n",ndn);
-	}*/
-	if(ep.echo) 
-		echo(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff,
-		     ep.echo_bpm,((double)ep.echo_when)/100.0,ep.echo_reps);
-	//return;
-	if(ep.dist)
-		//distorsion(buff,buff_size,ep.dist_ammount,ep.dist_type);
-		lala(buff,buff_size,ep.dist_ammount/128.0,ep.dist_type*ep.dist_type);
-
 	if(ep.out_v!=8){
 		double vol = ((double)(ep.out_v * ep.out_v))/64.0;
 		buff_volume_adjust(buff,0,buff_size,vol);
 	}
 	return;
-	/*
-	if(mask&0x01){
-		if(th1_valid==1){
-			playnota=nota*(playnota!=-10);
-			th1_valid=0;
-		}
-		if(th1_ready==1){
-			//for(int i=0; i<buff_size; ++i) th1buff[i]=buff[i];
-			th1_start=1;
-		}
-		if(playnota>100)synth(playnota,0,buff,buff_size,rate);
-		else bufftozero(buff,0,buff_size);
-	}	
-	if(mask&0x02){
-		//echo(period,buff,buff_size,echo_time,echo_reps);
-	}
-	if(mask&0x04){
-		distorsion(buff,buff_size,dist_ammount,dist_type);
-	}
-	
-	
-	if(out_v!=1)buff_volume_adjust(buff,0,buff_size,out_v);*/
-
 }
 
 
 
 int main(int argc, char* argv[])
 {
-	ep.dist_ammount=0;ep.echo_bpm=60;ep.echo_when=100;ep.echo_reps=1;
-	ep.in_v=8;ep.out_v=8;ep.dist_type=2;ep.dist=0;ep.echo=0;
+	ep.dist_ammount=0;ep.dist_th=225;ep.dist_soft=4;ep.dist_hard=7;
+	ep.echo_bpm=60;ep.echo_when=100;ep.echo_reps=1;
+	ep.in_v=8;ep.out_v=8;
+	ep.dist=0;ep.echo=0;ep.synt=0;
+	ep.enable = 0;
 	//ep = {0,100,100,1,8,8,0,0,0};
 	pthread_t socketthread,socketthread1;
 	if (pthread_create(&socketthread,NULL,(void *)th1_work,0)){
@@ -270,18 +247,12 @@ int main(int argc, char* argv[])
 	if (pthread_create(&socketthread1,NULL,(void *)th2_work,0)){
 		printf("error creating thread\n");
 	}
-	//process_params(argc,argv);
-	//dist_ammount=18;echo_time=1000;echo_reps=4;nthreads=3;
 	inisintable();
-	//printf("%lf\n",getSin(1.5*PI));
 	inicostable();
 	//th[0-450-100] soft[0-4-10] hard [0-7-10]
-	iniDiode(5000, 9, 7);
-	//iniDiodeTable();
-	//printf("%lf\n",getCos(100));
+	iniDiode(450, 4, 7);
 
-
-
+/*
 	int err;
 	err = gpio_ini();
 	if(err<0){
@@ -301,37 +272,9 @@ int main(int argc, char* argv[])
 	gpio_setInput(BTN_VLUP);
 	gpio_setInput(BTN_VLUP);
 	gpio_setInput(BTN_VLDW);
-	int r;
+*/	int r;
 	nthreads=1;
-	//goto th0;
-	
-
-
 	th0_work();
-	/*
-	omp_set_num_threads(nthreads);
-	#pragma omp parallel
-	{
-	printf("soc %d\n",omp_get_thread_num());
-	if(omp_get_thread_num()==0) th0_work();
-	else if(omp_get_thread_num()==1) th1_work();
-	else if(omp_get_thread_num()==2) th2_work();
-	else{
-		printf("unexpected thread. closing \n");
-		exit(0);
-	}
-	}*/
-	//return 0;
-	/*
-	libusb_free_transfer(trans);
-	libusb_free_device_list(devs,1);
-	r = libusb_release_interface(dev_handle, 0);
-	if (r!=0){
-		printf("cannot release interface\n");
-	}
-	printf("interface released");
-	libusb_close(dev_handle);
-	libusb_exit(ctx);*/
 	snd_pcm_drain(handle);
 	snd_pcm_close(handle);
 	
@@ -355,27 +298,30 @@ void th0_work(){
 	libusb_device **devs = NULL;
 	libusb_context *ctx = NULL;	
 	iniusblib(ctx);
-	//DeviceScan(ctx,devs);
-	libusb_device_handle *dev_handle = selectDevice(ctx,2235,10690,INTERFACE,ALTSETTING);
-	struct libusb_transfer* trans;
-	iniTransmission(dev_handle,trans);
+	DeviceScan(ctx,devs);
+ 	libusb_device_handle *dev_handle_i = selectDevice(ctx,2235,10690,INTERFACE,ALTSETTING);
+  	libusb_device_handle *dev_handle_o = selectDevice(ctx,2235,10690,INTERFACE_O,ALTSETTING_O);
+ 	struct libusb_transfer* trans_i;
+  	struct libusb_transfer* trans_o;
+	iniTransmission_i(dev_handle_i,trans_i);
+	iniTransmission_o(dev_handle_o,trans_o);
 
 	while(1){
-		//printf("time: %d\n", clock()-ttime);
-	//	ttime=clock();
-		int r = libusb_handle_events(ctx);
-		if(r != LIBUSB_SUCCESS){
-			printf("libusb handle events unsuccesfull \n");
-			//return 0;
-		}
-	}
-	//libusb
-	libusb_free_transfer(trans);
-	libusb_free_device_list(devs,1);
-	int r = libusb_release_interface(dev_handle, 0);
+  		int r = libusb_handle_events(ctx);
+  		if(r != LIBUSB_SUCCESS){
+  			printf("libusb handle events unsuccesfull \n");
+      		//return 0;
+  		}
+        }
+  	libusb_free_transfer(trans_i);
+        libusb_free_device_list(devs,1);
+  	int r = libusb_release_interface(dev_handle_i, 0);
+  	if (r!=0)printf("cannot release interface\n");
+	r = libusb_release_interface(dev_handle_o, 0);
 	if (r!=0)printf("cannot release interface\n");
 	printf("interface released");
-	libusb_close(dev_handle);
+  	libusb_close(dev_handle_i);
+  	libusb_close(dev_handle_o);
 	libusb_exit(ctx);
 }
 void th1_work(){
@@ -394,7 +340,7 @@ void th1_work(){
     	servaddr.sin_family = AF_INET; 
     	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     	servaddr.sin_port = htons(socket_port); 
-    	if(inet_pton(AF_INET,"192.168.1.155", &servaddr.sin_addr)<=0) printf("ERROR addr not suported");
+    	if(inet_pton(AF_INET,IP, &servaddr.sin_addr)<=0) printf("ERROR addr not suported");
     	// Binding newly created socket to given IP and verification 
     	if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) { 
         	printf("socket bind failed...\n"); 
@@ -412,30 +358,98 @@ void th1_work(){
        	 	printf("server acccept failed...\n"); 
         	exit(0); 
     	}else printf("server acccept the client...\n");
-    	int s = 6;
-    	unsigned char buff[s];
+    	
 
+
+	int s = 4;
+    	unsigned char buff[4];
+	/*trames de 4 Bytes
+	
+	General: E=Enable
+	+-------+-------+-------+-------+-------+-------+-------+-------+
+	|0000, EXXX	|    XXXXXXXX   |   XXXXXXXX    |     XXXXXXX	|
+	+-------+-------+-------+-------+-------+-------+-------+-------+
+	
+	volume:
+	+-------+-------+-------+-------+-------+-------+-------+-------+
+	|0001, xxxx	| IIII  , OOOO  |   XXXXXXXX    |     XXXXXXX	|
+	+-------+-------+-------+-------+-------+-------+-------+-------+
+
+	dist:
+	+-------+-------+-------+-------+-------+-------+-------+-------+
+	|0010, Ennn	|    dddddddd   |   tttttttt    |  ssss , hhhh 	|
+	+-------+-------+-------+-------+-------+-------+-------+-------+
+	
+	echo:
+	+-------+-------+-------+-------+-------+-------+-------+-------+
+	|0011, Errr	|    bbbbbbbb   |   wwwwwwww    |   XXXXXXXX	|
+	+-------+-------+-------+-------+-------+-------+-------+-------+
+
+	syn:
+	+-------+-------+-------+-------+-------+-------+-------+-------+
+	|0100, EXXX	|    XXXXXXXX   |   XXXXXXXX    |   XXXXXXXX	|
+	+-------+-------+-------+-------+-------+-------+-------+-------+
+
+	*/
+	uint16_t th,soft,hard;
+	uint8_t nmessages = 0;
     	while(1){
-    		for(int i=0; i<s;++i)buff[i]=0;
+    		read(connfd,&nmessages,1);
+		printf("nmessages = %d\n",nmessages);
+		for(int nm=0; nm<nmessages; ++nm){
+
+		for(int i=0; i<s;++i)buff[i]=0;
     		read(connfd,buff,sizeof(buff));
-		ep.in_v = (short)(buff[s-1]>>4);
-		ep.out_v = (short)(buff[s-1]&0x0F);
-		ep.synt = (char)((buff[s-2]>>4)&0x01);
-		ep.dist = (char)((buff[s-2]>>3)&0x01);
-		ep.dist_type = (short)(buff[s-2]&0x07);
-		ep.dist_ammount = (int)(((buff[s-3]>>1))&0x7F);
-		ep.echo = (char)(buff[s-3]&0x01);
-		ep.echo_bpm = (int)buff[s-4];
-		ep.echo_when = (int)buff[s-5];
-		ep.echo_reps = (int)buff[s-6];
-		printf("client sended->\n in_v:%d out_v:%d \n synt:%d \ndist:%d dist_t:%d dist_a:%d\n echo:%d echo_bpm:%d echo_when:%d echo_reps:%d\n",ep.in_v,ep.out_v,ep.synt,ep.dist,ep.dist_type,ep.dist_ammount,ep.echo,ep.echo_bpm,ep.echo_when,ep.echo_reps);
+		//printf("code op: %02x\n",buff[s-1]);
+		switch(buff[s-1]>>4){
+			case CODE_GEN:
+				ep.enable = (char)buff[s-1]&0x08;
+				//ep.enable=1;
+				printf("gen: enable=%d\n",ep.enable);
+				break;
+			case CODE_VOL:
+				ep.in_v  = buff[s-2]>>4;
+				ep.out_v = buff[s-2]&0x0F;
+				printf("vol: in=%d out=%d\n",ep.in_v,ep.out_v);
+				break;
+			case CODE_DIS:
+				ep.dist = (char)buff[s-1]&0x08;
+				ep.dist_ammount = buff[s-2];
+				th = buff[s-3];
+				soft = buff[s-4]>>4;
+				hard = buff[s-4]&0x0F;
+				if(th!=ep.dist_th || soft!=ep.dist_soft || hard!=ep.dist_hard){
+					iniDiode((int)th<<1, soft, hard);
+				}
+				ep.dist_tone = buff[s-1]&0x07;
+				ep.dist_th = th;
+				ep.dist_soft = soft;
+				ep.dist_hard = hard;
+				printf("dis: enable=%d amm=%d th=%d s=%d h=%d\n",ep.dist, ep.dist_ammount,ep.dist_th,ep.dist_soft,ep.dist_hard);
+				break;
+			case CODE_ECH:
+				ep.echo = (char)buff[s-1]&0x08;
+				ep.echo_reps = buff[s-1]&0x7;
+				ep.echo_bpm  = buff[s-2];
+				ep.echo_when = buff[s-3];
+				printf("echo: enable=%d reps=%d bpm=%d when=%d\n",ep.echo,ep.echo_reps,ep.echo_bpm,ep.echo_when);
+				break;
+			case CODE_SYN:
+				ep.synt = (char)buff[s-1]&0x08;
+				printf("syn: enable=%d\n",ep.synt);
+				break;
+			default:
+				break;
+			
+	
+		}//switch		
+		}//nmessages
 		connfd = accept(sockfd, (SA*)&cli, &len); 
     } 
     //close the socket 
     close(sockfd); 
 }
 void th2_work(){
-
 	while(1){
 		while(!detect_start);
 		detect_start = 0;
@@ -443,7 +457,6 @@ void th2_work(){
 		nota = detectNote(savedbuff,savedbuff_size,pos_in_savedbuff,rate);
 		detect_finished = 1;
 	}
-
 }
 void init(){
 
@@ -533,7 +546,8 @@ libusb_device_handle* selectDevice(libusb_context *ctx, int vid, int pid, int in
 
 	if(libusb_kernel_driver_active(dev_handle, interface) == 1){
 		printf("Kernel Driver Active \n");
-		if(libusb_detach_kernel_driver(dev_handle,interface) ==0) printf("Kernel Driver Detached \n");
+		if(libusb_detach_kernel_driver(dev_handle,interface) ==0) 
+			printf("Kernel Driver Detached \n");
 	}
 	int r = libusb_claim_interface(dev_handle,interface);
 	if(r<0){
@@ -544,7 +558,7 @@ libusb_device_handle* selectDevice(libusb_context *ctx, int vid, int pid, int in
 	if (r!=0){
 		printf("couldnt set alt setting \n");
 	}
-	printf("interface %d claimed \n",interface);
+	printf("interface %d claimed, alt setting %d\n",interface, alt_setting);
 	return dev_handle;
 }
 
@@ -593,29 +607,40 @@ void init_output(){
 }
 
 
-void iniTransmission(libusb_device_handle * dev_handle, struct libusb_transfer* trans){
+void iniTransmission_i(libusb_device_handle * dev_handle, struct libusb_transfer* trans){
 	int received = 0;
-	//int size = 180;
-	//static uint8_t buffer[180]; //TODO: automatitzar max packet size
-	//tramabus = malloc(ISOSIZE);
-	static uint8_t tramabus[ISOSIZE];
-
-	for(int i=0; i<ISOSIZE; ++i) tramabus[i]=0;
+	static uint8_t tramabus[ISOSIZE_I]; 
+	for(int i=0; i<ISOSIZE_I; ++i) tramabus[i]=0;
 	int num_iso_pack = 1;
 	trans = libusb_alloc_transfer(num_iso_pack);
 	if (trans==NULL){
 		printf("Error allocating transfer");
 		exit(0);
 	}
-	libusb_fill_iso_transfer(trans,dev_handle,132,tramabus,sizeof(tramabus),num_iso_pack,callback,NULL,0);
+	libusb_fill_iso_transfer(trans,dev_handle,132,tramabus,sizeof(tramabus),num_iso_pack,callback_i,NULL,0);
 	libusb_set_iso_packet_lengths(trans,sizeof(tramabus)/num_iso_pack);
 	//TODO: recomanen enviar mes d'un packet
-
 	int r = libusb_submit_transfer(trans);
-	if(r!=0){
-		printf("Error submiting transfer \n");
-	}
+	if(r!=0)printf("Error submiting transfer \n");
 }
+
+void iniTransmission_o(libusb_device_handle * dev_handle, struct libusb_transfer* trans){
+	int received = 0;
+	static uint8_t tramabus[ISOSIZE_O]; 
+	for(int i=0; i<ISOSIZE_O; ++i) tramabus[i]=0;
+	int num_iso_pack = 1;
+	trans = libusb_alloc_transfer(num_iso_pack);
+	if (trans==NULL){
+		printf("Error allocating transfer");
+		exit(0);
+	}
+	libusb_fill_iso_transfer(trans,dev_handle,2,tramabus,sizeof(tramabus),num_iso_pack,callback_o,NULL,0);
+	libusb_set_iso_packet_lengths(trans,sizeof(tramabus)/num_iso_pack);
+	//TODO: recomanen enviar mes d'un packet
+	int r = libusb_submit_transfer(trans);
+	if(r!=0)printf("Error submiting transfer \n");
+}
+
 void process_params(int argc, char* argv[]){
 /*	
 	if(argc<4) printf("falten params:\n sudo ./main.o in_v out_v mask dist_type/echo_time dist_ammount/echo_reps\n");

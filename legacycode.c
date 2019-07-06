@@ -1,4 +1,88 @@
 
+
+void distorsion(char* buff, int buff_size, double dis, int tipo){
+	//printf("%d -> %d\n",0xFFFE,vecToInt(0xFF,0xFF));
+	//printf("@c %d \n",(int)buff);
+	short* sbuff = (short*)&(buff[0]);
+
+	double den = (dis/4.0) + 1.0;
+	int limit = 32767.0/den;
+	//printf("limit: %d\n",limit);
+	//return;
+	int pos = -1;
+	int posn = -1;
+	int a,b;
+	double l;
+	//int tipo = 2;//0:linear, 1:quadratic, 2:cubic, 3:atenuation
+	for(int i=0; i<buff_size/BXS; i+=2){
+		if (sbuff[i]>limit && pos==-1) {//obrim
+			if(tipo!=0)pos=i;
+			else sbuff[i]=limit;
+		}else if ((i==(buff_size/BXS)-2 || sbuff[i]<limit) && pos!=-1){//tanquem
+			if(tipo==1){
+				quadunion(sbuff,buff_size,pos,i,limit,5);
+			}else if(tipo==2){
+				if(pos==0){
+					int lon = (i-pos)/2;
+					if(lon%2!=0)++lon;
+					quadunion(sbuff,buff_size,0,lon,limit,5);
+					quadunion(sbuff,buff_size,lon,i,limit,-5);
+				}
+				if(i==(buff_size/BXS)-2){
+					quadunion(sbuff,buff_size,pos,i,limit,-5);
+				}else if(pos!=0){
+					int lon = (i-pos)/3;
+					if (lon%2!=0)++lon;
+					int l1 = pos + lon;
+					int l2 = l1 + lon;
+					quadunion(sbuff,buff_size,pos,l1,limit,-5);
+					quadunion(sbuff,buff_size,l1,l2,limit,5);
+					quadunion(sbuff,buff_size,l2,i,limit,-5);
+				}
+			}else if(tipo==3){
+				for(int j=pos;j<=i;j+=2)sbuff[j]=((sbuff[j]-limit)*0.4)+limit;
+			}
+			pos = -1;	
+		}else if (sbuff[i]<-limit && posn==-1){//obrim
+			if(tipo!=0)posn=i;
+			else sbuff[i]=-limit;
+		}else if ((i==(buff_size/BXS)-2 ||sbuff[i]>-limit) && posn!=-1){//tanquem
+			if(tipo==1){
+				quadunion(sbuff,buff_size,posn,i,-limit,-5);
+			}
+			else if(tipo==2){
+				if(posn==0){
+					int lon = (i-posn)/2;
+					if(lon%2!=0)++lon;
+					quadunion(sbuff,buff_size,0,lon,-limit,-5);
+					quadunion(sbuff,buff_size,lon,i,-limit,5);
+				}else if(i==(buff_size/BXS)-2){
+					quadunion(sbuff,buff_size,posn,i,-limit,5);
+				}else{
+					int lon = (i-posn)/3;
+					if(lon%2!=0)++lon;
+					int l1 = posn +lon;
+					int l2 = l1 + lon;
+					quadunion(sbuff,buff_size,posn,l1,-limit,5);
+					quadunion(sbuff,buff_size,l1,l2,-limit,-5);
+					quadunion(sbuff,buff_size,l2,i,-limit,5);
+				}
+			}else if(tipo==3){
+				for(int j=pos;j<=i;j+=2)sbuff[j]=((sbuff[j]+limit)*0.5)-limit;
+
+			}
+
+			posn=-1;
+		}
+		//printf("%d %d\n",i,sbuff[i]);
+	}
+	/*
+	for(int i=0; i<buff_size; i+=2){
+		int value = vecToInt(buff[i+1],buff[i]);
+		printf("%d %d\n",i/2,value);		
+	}*/	
+}
+
 STYPE * detectbuff = (STYPE *)-1;
 int detectbuff_size;
 int detectbuff_howmany=10;
