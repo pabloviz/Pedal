@@ -1,6 +1,9 @@
 #define STYPE short
 #define MAXVALUE 32767
 #define BXS 2 //bytes per sample
+#define INTERLEAVED 2
+#define RATE 48000
+#define MAXSECONDS 5
 #define PI 3.14159265
 #define SAVED_mSECONDS 5000
 #define BTN_DIST 13

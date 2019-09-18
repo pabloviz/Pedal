@@ -4,15 +4,72 @@
 #include <sys/time.h>
 //new
 //
+
+STYPE lyant = 5000;
+// alpha 0.0 to 0.5 inverse
+void lowpass(char * buff, int buff_size, double alpha){
+	STYPE * sbuff = (STYPE *)(&buff[0]);
+	for(int i=0; i<buff_size/BXS; i+=2){
+		lyant = lyant + alpha*(sbuff[i] - lyant);
+		sbuff[i] = lyant;
+	}
+}
+
+STYPE xant = 5000;
+STYPE yant = 5000;
+//alpha 0.5 to 1.0 inverse
+void highpass(char * buff, int buff_size, double alpha){	
+	STYPE * sbuff = (STYPE *)(&buff[0]);
+	for(int i=0; i<buff_size/BXS; i+=2){
+		yant = alpha * (yant + sbuff[i] - xant);
+		xant = sbuff[i];
+		sbuff[i] = yant;
+	}
+}
+
+void echo(char* buff, int buff_size, char *savedbuff, int savedbuff_size, 
+	  int savedbuff_pos, double interval){
+	//printf("%hf\n",interval);
+	interval = interval + 0.1;
+	if (interval>4.0) interval = 4.0;
+	double interval_ini = interval;
+	STYPE * sbuff  = (STYPE *)(&buff[0]);
+	STYPE * ssaved = (STYPE *)(&savedbuff[0]);
+	//5s -> savedbuff_size  }
+	//xs -> X pos           }  X = xs*size / 5
+	int howmany = (int)((double)MAXSECONDS/(double)interval);
+        int poses[howmany];
+	int pos;
+	for (int k=0; k<howmany; ++k){
+		int back = (int)((interval*(double)savedbuff_size)/MAXSECONDS);
+		pos = savedbuff_pos - back;
+		if (pos < 0) pos = savedbuff_size + pos;
+		poses[k] = pos / BXS;
+		interval += interval_ini;
+	}
+	double multiplier;
+	double tmp = (double)-howmany + 1.0;
+	double a = (0.2-0.00)/(tmp*tmp*tmp*tmp);
+	for (int rep=0; rep<howmany; ++rep){
+		tmp = (rep-howmany+1.0);
+		multiplier = a*tmp*tmp*tmp*tmp + 0.00;
+		//printf("%lf\n",multiplier);
+		pos = poses[rep];
+		for (int i=0; i<buff_size/BXS; i+=INTERLEAVED){
+			sbuff[i] += (int)((double)ssaved[pos++]*multiplier);
+			if (pos > savedbuff_size/BXS) pos = 0;
+		}
+	}
+}
+
+
+
+/*
 double cachedvalue = -1.0;
 long* intbuffer;
 void echo(char* buff, int buff_size, char* savedbuff, int savedbuff_size,
 	int savedbuff_pos, int bpm, double when, int howlong){
 
-	/*if(when<0.0 || howlong*when*1000>SAVED_mSECONDS || bpm<0){
-		printf("invalid parameters for echo %d %lf %d\n",bpm,when,howlong);
-		return;
-	}*/
 	if(intbuffer==NULL) intbuffer = (long *)malloc((buff_size/2.0)*sizeof(long));
 	if(cachedvalue==-1.0) cachedvalue = (double)savedbuff_size*60.0*1000.0;
 	double bytes_per_beat = cachedvalue/((double)bpm*SAVED_mSECONDS);
@@ -53,7 +110,7 @@ void echo(char* buff, int buff_size, char* savedbuff, int savedbuff_size,
 		}
 	}
 }
-
+*/
 void reverb(char* buff, int buff_size, char* savedbuff, int savedbuff_size,
 	  int savedbuff_pos){
 	
@@ -212,6 +269,53 @@ void synth(int f, int instr, char* buff, int buff_size,int rate){ //a 16 bits
 		}
 	}
 }
+STYPE gnuplot[1024];
+STYPE gnuplot2[1024];
+int gnuplotindex=0;
+
+STYPE clean_last = 0;
+STYPE newdist_last = 0;
+int creixent = 0;
+int decreixent = 0;
+double alpha=1.0;
+void newdist(char * buff, int buff_size, int th, double gain, int saturation, double reductor, double duracion, double ammount){
+	STYPE * sbuff = (STYPE*) &(buff[0]);
+	STYPE distance=0;
+	//abans o despres!
+	for(int i=0; i<buff_size/BXS; i+=2){
+		sbuff[i] = getDiode2(sbuff[i])*duracion + sbuff[i]*(1-duracion);
+	}
+
+	for(int i=0; i<buff_size/BXS; i+=2){
+		distance = sbuff[i]-clean_last;
+		clean_last = sbuff[i];
+		STYPE extra = (STYPE)((double)(distance)*gain*alpha);
+		STYPE new = newdist_last+extra;	
+		sbuff[i] = new*duracion + clean_last*(1-duracion);
+		newdist_last = new;
+/*    			
+		gnuplot2[gnuplotindex]=clean_last;
+		//if(i==buff_size/BXS - 2) gnuplot2[gnuplotindex]=0.0;
+		gnuplot[gnuplotindex]=sbuff[i];
+		++gnuplotindex;
+		if(gnuplotindex==1024){
+			gnuplotindex=0;
+			FILE * fp = fopen("data.csv", "w+");
+			FILE * fp2 = fopen("data2.csv", "w+");
+			for(int j=0; j<1024; ++j) {
+				fprintf(fp,"%d %d\n",j,gnuplot[j]);
+				fprintf(fp2,"%d %d\n",j,gnuplot2[j]);
+			}
+			rename("data.csv", "datafin.csv");
+			rename("data2.csv", "datafin2.csv");
+			fclose(fp);
+			fclose(fp2);
+		}
+    
+*/					
+	}
+}
+
 
 
 
@@ -225,8 +329,27 @@ void lala(char * buff, int buff_size, double dis, int tipo){
 		STYPE new;
 		if (old<0) new = getDiode(-old);
 		else new = getDiode(old);
+
 		if(old<0) sbuff[i] = old*(1-dis) - new*dis;
 		else if (old>0) sbuff[i] = old*(1-dis) + new*dis;
+		
+		gnuplot2[gnuplotindex]=old;
+		gnuplot[gnuplotindex]=sbuff[i];
+		++gnuplotindex;
+		if(gnuplotindex==1024){
+			gnuplotindex=0;
+			FILE * fp = fopen("data.csv", "w+");
+			FILE * fp2 = fopen("data2.csv", "w+");
+			for(int j=0; j<1024; ++j) {
+				fprintf(fp,"%d %d\n",j,gnuplot[j]);
+				fprintf(fp2,"%d %d\n",j,gnuplot2[j]);
+			}
+			rename("data.csv", "datafin.csv");
+			rename("data2.csv", "datafin2.csv");
+			fclose(fp);
+			fclose(fp2);
+		}
+
 		//else sbuff[i] = 0;
 	}
 }
@@ -243,6 +366,7 @@ void flanger(char * buff, int buff_size, char * savedbuff, int savedbuff_size, i
 
 
 }
+/*
 STYPE last_low = 0;
 void lowpass(char* buff, int buff_size, int ammount){
 	double alfa = (double)ammount/10.0;
@@ -252,6 +376,5 @@ void lowpass(char* buff, int buff_size, int ammount){
 		sbuff[i] = sbuff[i]*(1.0-alfa) + last_low*alfa;
 		last_low = sbuff[i];	
 	}
-
-
 }
+*/

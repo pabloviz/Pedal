@@ -17,7 +17,7 @@ STYPE sigadd(STYPE a, STYPE b);
 //__attribute__((always_inline))
 STYPE mult_sat(STYPE val, double mult);
 
-void buff_volume_adjust(char * buff, int ini, int fin,double volume);
+void buff_volume_adjust(char * vol_buff, int ini, int vol_buff_size,double volume);
 
 void printbuff(char* buff, int buff_size);
 

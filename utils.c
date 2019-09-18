@@ -25,12 +25,13 @@ STYPE sigadd(STYPE a, STYPE b){
 	return a + b;
 }
 
-void buff_volume_adjust(char * buff, int ini, int buff_size,double volume){
+void buff_volume_adjust(char * vol_buff, int ini, int vol_buff_size,double volume){
 	//struct timeval tv1,tv2;
 	//gettimeofday(&tv1,NULL);
-	short* sbuff = (short*)&(buff[0]);
+//	printf("vol: %d\n",vol_buff);
+	short* sbuff = (short*)&(vol_buff[0]);
 	if(ini%2==1) printf("ini ha de ser un nombre parell");
-	for(int i=0; i<buff_size/BXS; i+=2){
+	for(int i=0; i<vol_buff_size/BXS; i+=2){
 		int new = (int)sbuff[i]*volume;
 		if(new>MAXVALUE)new=MAXVALUE;
 		else if (new<-MAXVALUE)new=-MAXVALUE;

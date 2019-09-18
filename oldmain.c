@@ -38,13 +38,6 @@ char * savedbuff = NULL;
 int savedbuff_index = 0;
 int savedbuff_size = 0;
 
-#define LOOP_N 4
-#define LOOP_MAX 1048576 
-char looping[LOOP_N][LOOP_MAX];
-int looping_length[LOOP_N];
-int looping_index[LOOP_N];
-
-
 struct libusb_transfer* trans_o;
 struct libusb_transfer* trans_i;
 
@@ -78,8 +71,9 @@ int received=0;
 
 int pending = 0;
 
-int fd_i;
-int fd_o;
+int cachebuffindex = 0;
+char * cachebuff[ISOSIZE_O/2];
+
 void callback_i(struct libusb_transfer* transfer){
 	if (transfer->status != LIBUSB_TRANSFER_COMPLETED){
 		printf("Transfer not completed. status = %d \n",transfer->status);
@@ -101,27 +95,17 @@ void callback_i(struct libusb_transfer* transfer){
 	for(int i=0; i<realsize;i+=1){
 		
 		if((i%4)<2){//interleaved
-			trans_o->buffer[buffindex] = transfer->buffer[i];
+			//trans_o->buffer[buffindex] = transfer->buffer[i];
+			cachebuff[buffindex]
 			savedbuff[savedbuff_index++] = transfer->buffer[i];
 			if (savedbuff_index==savedbuff_size) savedbuff_index=0;
 		}
 		else trans_o->buffer[buffindex]=0;
-	
-		//read
-	//	trans_o->buffer[buffindex] = bu[buffindex];
-	
 		++buffindex;
 		if(buffindex==ISOSIZE_O){
 			applyeffects(trans_o->buffer,ISOSIZE_O);
-			buffindex = 0;
-			//read
-			//read(0,trans_o->buffer,ISOSIZE_O);	
+			buffindex=0;
 			err = libusb_submit_transfer(trans_o);
-			
-			//write
-			//for(int l=0;l<ISOSIZE_O;++l) write(fd_o,&trans_o->buffer[l],sizeof(trans_o->buffer[l]));
-				//printf("%c",trans_o->buffer[l]);
-			
 			sent=1;
 			if(err!=0) {
 				printf("eeei? %d\n",err);
@@ -172,43 +156,16 @@ void applyeffects(char * ef_buff, int ef_buff_size){
 		}*/
 		if(ep.echo) 
 	
-	  		echo(ef_buff, ef_buff_size, savedbuff, savedbuff_size, savedbuff_index, (double)(ep.echo_when*5.0)/100.0);
+	  		echo(ef_buff, ef_buff_size, savedbuff, savedbuff_size, savedbuff_index, (double)(ep.echo_when*5)/100.0);
 
 
 		//	echo(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff,
 		  //   	     ep.echo_bpm,((double)ep.echo_when)/100.0,ep.echo_reps);
-		//printf("%d\n",ep.dist_soft);
-		if(ep.dist){
-			newdist(ef_buff, ef_buff_size, ep.dist_hard*5, ep.dist_hard/2.0, ep.dist_th*140, 0.0, (double)ep.dist_ammount/127.0, ((double)(ep.dist_soft-4))/30.0);
-			//lala(ef_buff,ef_buff_size,ep.dist_ammount/127.0,ep.dist_tone/256.0);
+		if(ep.dist)
+			lala(ef_buff,ef_buff_size,ep.dist_ammount/127.0,ep.dist_tone/256.0);
 		
-		//	lowpass(ef_buff,ef_buff_size,0.4);
-		//	highpass(ef_buff,ef_buff_size,0.99);
-		}
 	}
-
-	//TODO: MOVE IT
-/*	if (looping_length[0] < LOOP_MAX - 1){	
-	for (int i=0; i<ef_buff_size && looping_length[0]<LOOP_MAX-1; i+=4){
-		looping[0][looping_length[0]++]=ef_buff[i];		
-		looping[0][looping_length[0]++]=ef_buff[i+1];		
-	}//printf("recording\n");
-	}else{
-	//printf("playing\n");
-	STYPE * sbuff = (STYPE *)&(ef_buff[0]);
-	for (int i=0; i<ef_buff_size/BXS; i+=2){
-		char low  = (looping[0][looping_index[0]++]);
-		char high = (looping[0][looping_index[0]++]);
-		STYPE loop = high;
-		loop = loop<<8;
-		loop += low&0x0FF;
-		sbuff[i] += 0.6*loop;
-		if (looping_index[0] == looping_length[0]) looping_index[0]=0;
-	}
-	}	
-*/	
-
-	if(ep.out_v!=8 && ep.enable||1){
+	if(ep.out_v!=8){
 		double vol = ((double)(ep.out_v * ep.out_v))/64.0;
 		buff_volume_adjust(ef_buff,0,ef_buff_size,vol);
 	}
@@ -219,11 +176,6 @@ void applyeffects(char * ef_buff, int ef_buff_size){
 
 int main(int argc, char* argv[])
 {
-	for(int i=0; i<LOOP_N; ++i){
-		looping_index[i]=0;
-		looping_length[i]=0;
-	}	
-
 	ep.dist_ammount=0;ep.dist_th=225;ep.dist_soft=4;ep.dist_hard=7;
 	ep.echo_bpm=60;ep.echo_when=100;ep.echo_reps=1;
 	ep.in_v=8;ep.out_v=8;
@@ -234,9 +186,7 @@ int main(int argc, char* argv[])
 	printf("savedbuff_size: %d\n",savedbuff_size);	
 	savedbuff = malloc(savedbuff_size);
 
-	fd_i=open("input.txt", O_RDWR | O_CREAT);
-	fd_o=open("output.txt", O_RDWR | O_CREAT);
-	
+
 	pthread_t socketthread,socketthread1;
 	if (pthread_create(&socketthread,NULL,(void *)th1_work,0)){
 		printf("error creating thread\n");
@@ -249,7 +199,7 @@ int main(int argc, char* argv[])
 	}
 	inisintable();
 	inicostable();
-	//iniDiode(450, 4, 7);
+	iniDiode(450, 4, 7);
 
 /*
 	int err;
@@ -421,9 +371,7 @@ void th1_work(){
 				soft = buff[s-4]>>4;
 				hard = buff[s-4]&0x0F;
 				if(th!=ep.dist_th || soft!=ep.dist_soft || hard!=ep.dist_hard){
-					//iniDiode((int)th<<1, soft, hard);
-					//fin1_p, multini, linfin, softfin, hardfin){
-					iniDiode2((double)th/2048.0,1.1,0.95,0.1,0.01);
+					iniDiode((int)th<<1, soft, hard);
 				}
 				ep.dist_tone = buff[s-1]&0x07;
 				ep.dist_th = th;
