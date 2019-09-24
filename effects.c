@@ -4,6 +4,35 @@
 #include <sys/time.h>
 //new
 //
+double passeffect_val = 0.42;
+int up=1;
+void passeffect(char * buff, int buff_size, double sum){
+	lowhighpass(buff, buff_size,passeffect_val);
+	//printf("lalal %hf\n",(getSin(passeffect_val)+1.0) / 2.0);
+	if (up) passeffect_val += sum;
+	else passeffect_val -= sum;
+	if (up && passeffect_val>0.58) up=0;
+	else if (!up && passeffect_val<0.42) up=1;
+
+}
+
+
+
+
+double voleeffect_val = 0.0;
+void voleffect(char * buff, int buff_size, double sum, double intensity){
+	STYPE *sbuff = (STYPE *)(&buff[0]);
+	for(int i=0; i<buff_size/BXS; i+=2){
+		sbuff[i] = sbuff[i] * (getSin(voleeffect_val)*intensity+1);
+		voleeffect_val = voleeffect_val + sum;
+		if (voleeffect_val>2*PI) voleeffect_val = 0.0;
+	}
+}
+
+void lowhighpass(char * buff, int buff_size, double alpha){
+	if (alpha > 0.5) highpass(buff,buff_size,1.5-alpha);
+	else  lowpass(buff,buff_size,alpha);
+}
 
 STYPE lyant = 5000;
 // alpha 0.0 to 0.5 inverse
@@ -28,7 +57,7 @@ void highpass(char * buff, int buff_size, double alpha){
 }
 
 void echo(char* buff, int buff_size, char *savedbuff, int savedbuff_size, 
-	  int savedbuff_pos, double interval){
+	  int savedbuff_pos, double interval, double volume){
 	//printf("%hf\n",interval);
 	interval = interval + 0.1;
 	if (interval>4.0) interval = 4.0;
@@ -49,10 +78,10 @@ void echo(char* buff, int buff_size, char *savedbuff, int savedbuff_size,
 	}
 	double multiplier;
 	double tmp = (double)-howmany + 1.0;
-	double a = (0.2-0.00)/(tmp*tmp*tmp*tmp);
+	double a = (volume-0.0)/(tmp*tmp*tmp*tmp);
 	for (int rep=0; rep<howmany; ++rep){
 		tmp = (rep-howmany+1.0);
-		multiplier = a*tmp*tmp*tmp*tmp + 0.00;
+		multiplier = a*tmp*tmp*tmp*tmp + 0.0;
 		//printf("%lf\n",multiplier);
 		pos = poses[rep];
 		for (int i=0; i<buff_size/BXS; i+=INTERLEAVED){

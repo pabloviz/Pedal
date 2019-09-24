@@ -20,3 +20,6 @@
 #define CODE_DIS 0x2
 #define CODE_ECH 0x3
 #define CODE_SYN 0x4
+#define CODE_EQ  0x5
+#define CODE_TREM 0x6
+#define CODE_PRES 0xF

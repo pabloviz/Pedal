@@ -10,6 +10,9 @@
 //new
 
 
+void passeffect(char * buff, int buff_size, double sum);
+void voleffect(char * buff, int buff_size, double sum, double intensity);
+void lowhighpass(char * buff, int buff_size, double alpha);
 void lowpass(char * buff, int buff_size, double alpha);
 void highpass(char * buff, int buff_size, double alpha);
 
@@ -20,7 +23,7 @@ int echobuff_index;
 //void echo(int period, char* buff, int buff_size,int ret, int layers);
 
 void echo(char* buff, int buff_size, char *savedbuff, int savedbuff_size, 
-	  int savedbuff_pos, double interval);
+	  int savedbuff_pos, double interval, double volume);
 
 //void echo(char* buff, int buff_size, char* savedbuff, int savedbuff_size,
 //	  int savedbuff_pos, int bpm, double when, int howlong);

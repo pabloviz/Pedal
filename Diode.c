@@ -86,10 +86,19 @@ STYPE points_y[DIODE_N2];
 double slopes[DIODE_N2];
 
 void iniDiode2(double fin1_p, double multini, double linfin, double softfin, double hardfin){
-	double fin2_p = fin1_p + fin1_p/2;
+	double fin2_p = fin1_p + 3*fin1_p/4;
 	STYPE fin1 = fin1_p * DIODE_N2;
 	STYPE fin2 = fin2_p * DIODE_N2;
-	printf("%d %d\n", fin1, fin2);
+	if (fin1==0) {
+		fin1 = 1;
+		fin2 = 2;
+	}
+	
+	//printf("fin1 %d:%d fin2 %d:%d\n",fin1,step*fin1,fin2,step*fin2);
+	double hardreduct = hardfin;
+//	printf("hardreduct %hf\n", hardreduct);
+	hardfin = -0.01;
+
 	double mult = multini;
 	points_x[0] = 0;
 	points_y[0] = 0;
@@ -122,12 +131,14 @@ void iniDiode2(double fin1_p, double multini, double linfin, double softfin, dou
 	for(i=step*fin2; i<=step*DIODE_N2;i+=step){
 		points_x[index] = i-1;
 		points_y[index] = next_y;
-		mult -= harddec;
+		//mult -= harddec;
+		mult = mult - mult/hardreduct;
+		//mult = 1.0;
 		slopes[index] = mult;
 		next_y = slopes[index]*(points_x[index]-points_x[index-1])+points_y[index];
 		++index;
 	}
-	for(i=0; i<DIODE_N2;++i) printf("%d %d %hf\n",points_x[i],points_y[i],slopes[i]);	
+	//for(i=0; i<DIODE_N2;++i) printf("%d %d %hf\n",points_x[i],points_y[i],slopes[i]);	
 	FILE * fp = fopen("diode.csv", "w+");
 	for(int k=0; k<32768; ++k){
 		fprintf(fp,"%d %d\n",k,getDiode2(k));

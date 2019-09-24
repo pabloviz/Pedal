@@ -148,7 +148,7 @@ struct effectparams{
 	uint8_t eq_val;
 	uint8_t tremolo_speed, tremolo_intensity;
 };
-struct effectparams presets[3+1];
+struct effectparams presets[3];
 
 struct effectparams * ep;
 
@@ -163,11 +163,11 @@ void applyeffects(char * ef_buff, int ef_buff_size){
 	//voleffect(ef_buff,ef_buff_size,0.001);
 	//passeffect(ef_buff,ef_buff_size,0.01);
 
-	if(ep->in_v!=8){
-		double vol = ((double)(ep->in_v * ep->in_v))/64.0;
+	if(ep.in_v!=8){
+		double vol = ((double)(ep.in_v * ep.in_v))/64.0;
 		buff_volume_adjust(ef_buff,0,ef_buff_size,vol);
 	}
-	if(ep->enable){
+	if(ep.enable){
 		/*if(ep.synt){
 			if(detect_finished==1){
 				detect_finished=0;
@@ -177,18 +177,26 @@ void applyeffects(char * ef_buff, int ef_buff_size){
 			if(playnota>100) synth(playnota,0,buff,buff_size,rate);
 			else bufftozero(buff,0,buff_size);
 		}*/
-		if(ep->echo) 
+		if(ep.echo) 
 	
-	  		echo(ef_buff, ef_buff_size, savedbuff, savedbuff_size, savedbuff_index, (double)((100-ep->echo_speed)*5.0)/200.0, (double)ep->echo_volume/100.0);
-		if(ep->dist){
-			newdist(ef_buff, ef_buff_size, ep->dist_mult, ep->dist_mult, ep->dist_th*280, 0.0, (double)ep->dist_ammount/100.0, ((double)(ep->dist_soft-4))/30.0);
+	  		echo(ef_buff, ef_buff_size, savedbuff, savedbuff_size, savedbuff_index, (double)((100-ep.echo_speed)*5.0)/200.0, (double)ep.echo_volume/100.0);
+
+
+		//	echo(buff,buff_size,savedbuff,savedbuff_size,pos_in_savedbuff,
+		  //   	     ep.echo_bpm,((double)ep.echo_when)/100.0,ep.echo_reps);
+		//printf("%d\n",ep.dist_soft);
+		if(ep.dist){
+			newdist(ef_buff, ef_buff_size, ep.dist_mult, ep.dist_mult, ep.dist_th*280, 0.0, (double)ep.dist_ammount/100.0, ((double)(ep.dist_soft-4))/30.0);
 			//lala(ef_buff,ef_buff_size,ep.dist_ammount/127.0,ep.dist_tone/256.0);
+		
+		//	lowpass(ef_buff,ef_buff_size,0.4);
+		//	highpass(ef_buff,ef_buff_size,0.99);
 		}
-		if (ep->eq){
-			lowhighpass(ef_buff, ef_buff_size, (double)ep->eq_val/100.0);
+		if (ep.eq){
+			lowhighpass(ef_buff, ef_buff_size, (double)ep.eq_val/100.0);
 		}
-		if (ep->tremolo){
-			voleffect(ef_buff,ef_buff_size,(double)ep->tremolo_speed/100000.0,(double)ep->tremolo_intensity/100.0);
+		if (ep.tremolo){
+			voleffect(ef_buff,ef_buff_size,(double)ep.tremolo_speed/100000.0,(double)ep.tremolo_intensity/100.0);
 		}
 	}
 
@@ -213,8 +221,8 @@ void applyeffects(char * ef_buff, int ef_buff_size){
 	}	
 */	
 
-	if(ep->out_v!=8 && ep->enable){
-		double vol = ((double)(ep->out_v * ep->out_v))/64.0;
+	if(ep.out_v!=8 && ep.enable){
+		double vol = ((double)(ep.out_v * ep.out_v))/64.0;
 		buff_volume_adjust(ef_buff,0,ef_buff_size,vol);
 	}
 	return;
@@ -228,15 +236,15 @@ int main(int argc, char* argv[])
 		looping_index[i]=0;
 		looping_length[i]=0;
 	}	
-	ep = &presets[0];
-	ep->dist_ammount=100;ep->dist_th=50;ep->dist_soft=5;ep->dist_hard=5;
+
+	ep.dist_ammount=100;ep.dist_th=50;ep.dist_soft=5;ep.dist_hard=5;
 	//ep.echo_bpm=60;ep.echo_when=100;ep.echo_reps=1;
-	ep->echo_speed=50;ep->echo_volume=50;
-	ep->eq_val=50;
-	ep->tremolo_speed=50;ep->tremolo_intensity=50;
-	ep->in_v=8;ep->out_v=8;
-	ep->dist=0;ep->echo=0;ep->synt=0;ep->eq=0;ep->tremolo=0;
-	ep->enable = 0;
+	ep.echo_speed=50;ep.echo_volume=50;
+	ep.eq_val=50;
+	ep.tremolo_speed=50;ep.tremolo_intensity=50;
+	ep.in_v=8;ep.out_v=8;
+	ep.dist=0;ep.echo=0;ep.synt=0;ep.eq=0;ep.tremolo=0;
+	ep.enable = 0;
 	//ep = {0,100,100,1,8,8,0,0,0};
 	savedbuff_size = (BXS*MAXSECONDS*RATE)/INTERLEAVED;
 	printf("savedbuff_size: %d\n",savedbuff_size);	
@@ -400,81 +408,72 @@ void th1_work(){
 
 	*/
 	int s = 4;
-    	unsigned char buff[s];
+    	unsigned char buff[4];
 	uint16_t th,soft,hard;
 	uint8_t nmessages = 0;
-	uint8_t preset = 0;
-	int p_index;
     	while(1){
-    		read(connfd,buff,sizeof(buff));
-		nmessages = buff[s-1];
-		preset = buff[s-2];
-		ep = &presets[(int)preset];
-		printf("nmessages = %d preset = %d\n",nmessages,preset);
-		//printf("%x \n%x \n%x \n%x \n",buff[s-1],buff[s-2],buff[s-3],buff[s-4]);
-
+    		read(connfd,&nmessages,1);
+		printf("nmessages = %d\n",nmessages);
 		for(int nm=0; nm<nmessages; ++nm){
 
-		//for(int i=0; i<s;++i)buff[i]=0;
-
-		printf("waiting for message %d/%d \n",nm+1,nmessages);
+		for(int i=0; i<s;++i)buff[i]=0;
     		read(connfd,buff,sizeof(buff));
-		printf("received! \n");
 		//printf("code op: %02x\n",buff[s-1]);
 		switch(buff[s-1]>>4){
 			case CODE_GEN:
-				ep->enable = (char)buff[s-1]&0x08;
-				printf("gen: enable=%d\n",ep->enable);
+				ep.enable = (char)buff[s-1]&0x08;
+				//ep.enable=1;
+				printf("gen: enable=%d\n",ep.enable);
 				break;
 			case CODE_VOL:
-				ep->in_v  = buff[s-2]>>4;
-				ep->out_v = buff[s-2]&0x0F;
-				printf("vol: in=%d out=%d\n",ep->in_v,ep->out_v);
+				ep.in_v  = buff[s-2]>>4;
+				ep.out_v = buff[s-2]&0x0F;
+				printf("vol: in=%d out=%d\n",ep.in_v,ep.out_v);
 				break;
 			case CODE_DIS:
-				ep->dist = (char)buff[s-1]&0x08;
-				ep->dist_mult = buff[s-1]&0x07;
-				ep->dist_ammount = buff[s-2];
-				ep->dist_th = buff[s-3];
-				ep->dist_soft = buff[s-4]>>4;
-				ep->dist_hard = buff[s-4]&0x0F;
-				iniDiode2((double)ep->dist_th/2048.0,1.0,0.95,(double)ep->dist_soft/10.0,11-ep->dist_hard);
-				printf("dis: enable=%d mult=%d amm=%d th=%d s=%d h=%d\n",ep->dist, ep->dist_mult, ep->dist_ammount,ep->dist_th,ep->dist_soft,ep->dist_hard);
+				ep.dist = (char)buff[s-1]&0x08;
+				ep.dist_mult = buff[s-1]&0x07;
+				ep.dist_ammount = buff[s-2];
+				th = buff[s-3];
+				soft = buff[s-4]>>4;
+				hard = buff[s-4]&0x0F;
+				if(th!=ep.dist_th || soft!=ep.dist_soft || hard!=ep.dist_hard){
+					//iniDiode((int)th<<1, soft, hard);
+					//fin1_p, multini, linfin, softfin, hardfin){
+					iniDiode2((double)th/2048.0,1.0,0.95,(double)soft/10.0,11-hard);
+				}
+				ep.dist_th = th;
+				ep.dist_soft = soft;
+				ep.dist_hard = hard;
+				printf("dis: enable=%d mult=%d amm=%d th=%d s=%d h=%d\n",ep.dist, ep.dist_mult, ep.dist_ammount,ep.dist_th,ep.dist_soft,ep.dist_hard);
 				break;
 			case CODE_ECH:
-				ep->echo = (char)buff[s-1]&0x08;
-				ep->echo_speed = buff[s-2];
-				ep->echo_volume = buff[s-3];
-				printf("echo: enable=%d speed=%d volume=%d when=%d\n",ep->echo,ep->echo_speed,ep->echo_volume);
+				ep.echo = (char)buff[s-1]&0x08;
+				ep.echo_speed = buff[s-2];
+				ep.echo_volume = buff[s-3];
+				printf("echo: enable=%d speed=%d volume=%d when=%d\n",ep.echo,ep.echo_speed,ep.echo_volume);
 				break;
 			case CODE_SYN:
-				ep->synt = (char)buff[s-1]&0x08;
-				printf("syn: enable=%d\n",ep->synt);
+				ep.synt = (char)buff[s-1]&0x08;
+				printf("syn: enable=%d\n",ep.synt);
 				break;
 			case CODE_EQ:
-				ep->eq = (char)buff[s-1]&0x08;
-				ep->eq_val = buff[s-2];
-				printf("eq: enable=%d val=%d \n",ep->eq,ep->eq_val);
+				ep.eq = (char)buff[s-1]&0x08;
+				ep.eq_val = buff[s-2];
+				printf("eq: enable=%d val=%d \n",ep.eq,ep.eq_val);
 				break;
 			case CODE_TREM:
-				ep->tremolo = (char)buff[s-1]&0x08;
-				ep->tremolo_speed = buff[s-2];
-				ep->tremolo_intensity = buff[s-3];
-				printf("tremolo: enable=%d speed=%d intensity=%d \n",ep->tremolo,ep->tremolo_speed, ep->tremolo_intensity);
-				break;
-			case CODE_PRES:
-				p_index = (int)(buff[s-1]&0x0F);
-				ep = &( presets[p_index] );
-				ep->enable = buff[s-2];
-				iniDiode2((double)ep->dist_th/2048.0,1.0,0.95,(double)ep->dist_soft/10.0,11-ep->dist_hard);
-				printf("loaded preset: %d , enable=%d\n", p_index,buff[s-2]);
+				ep.tremolo = (char)buff[s-1]&0x08;
+				ep.tremolo_speed = buff[s-2];
+				ep.tremolo_intensity = buff[s-3];
+				printf("tremolo: enable=%d speed=%d intensity=%d \n",ep.tremolo,ep.tremolo_speed, ep.tremolo_intensity);
 				break;
 			default:
 				break;
 				
 		}//switch		
 		}//nmessages
-		printf("correctly read %d messages\n\n",nmessages);
+		printf("correctly read %d messages\n",nmessages);
 		//ep.enable = 1;
 		connfd = accept(sockfd, (SA*)&cli, &len); 
     } 

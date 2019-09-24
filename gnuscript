@@ -1,5 +1,4 @@
-set xrange[0:511]
-set yrange[-15000:15000]
-plot "plot" using 1:2 with lines
-#pause 2
-#reread
+plot "datafin.csv" with lines, "datafin2.csv" with lines
+set yrange[-10000:10000]
+pause 2
+reread
